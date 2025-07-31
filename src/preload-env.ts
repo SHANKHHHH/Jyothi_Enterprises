@@ -18,7 +18,7 @@ const requiredEnvVars = [
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 
 if (missingEnvVars.length > 0) {
-  console.error('❌ Missing required environment variables:');
+  console.error(' Missing required environment variables:');
   missingEnvVars.forEach(envVar => {
     console.error(`   - ${envVar}`);
   });
@@ -47,8 +47,8 @@ export const env = {
 };
 
 // Log environment status
-console.log('✅ Environment variables loaded successfully');
-console.log(`🌍 Environment: ${env.NODE_ENV}`);
-console.log(`🚀 Server will run on port: ${env.PORT}`);
+console.log(' Environment variables loaded successfully');
+console.log(` Environment: ${env.NODE_ENV}`);
+console.log(` Server will run on port: ${env.PORT}`);
 
 export default env; 

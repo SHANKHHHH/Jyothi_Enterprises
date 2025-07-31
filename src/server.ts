@@ -38,10 +38,10 @@ app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🌍 Environment: ${env.NODE_ENV}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔐 Auth endpoints: http://localhost:${PORT}/api/auth`);
+  console.log(` Server running on port ${PORT}`);
+  console.log(` Environment: ${env.NODE_ENV}`);
+  console.log(` Health check: http://localhost:${PORT}/health`);
+  console.log(` Auth endpoints: http://localhost:${PORT}/api/auth`);
 });
 
 export default app; 
