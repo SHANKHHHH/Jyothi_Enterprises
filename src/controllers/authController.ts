@@ -37,14 +37,14 @@ export const signup = async (req: Request, res: Response) => {
     const passwordHash = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: { email, passwordHash },
-      select: { id: true, email: true, role: true, createdAt: true },
+      select: { id: true, email: true, createdAt: true },
     });
 
     const jwtOptions: jwt.SignOptions = {
       expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any,
     };
     const token = jwt.sign(
-      { userId: user.id, role: user.role },
+      { userId: user.id },
       process.env.JWT_SECRET as string,
       jwtOptions
     );
@@ -78,14 +78,14 @@ export const login = async (req: Request, res: Response) => {
       expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any,
     };
     const token = jwt.sign(
-      { userId: user.id, role: user.role },
+      { userId: user.id },
       process.env.JWT_SECRET as string,
       jwtOptions
     );
 
     res.json({
       message: 'Login successful',
-      user: { id: user.id, email: user.email, role: user.role },
+      user: { id: user.id, email: user.email },
       token,
     });
   } catch (error) {
@@ -98,7 +98,7 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user?.id },
-      select: { id: true, email: true, role: true, createdAt: true, updatedAt: true },
+      select: { id: true, email: true, createdAt: true, updatedAt: true },
     });
     res.json({ user });
   } catch (error) {
@@ -107,33 +107,4 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
   }
 };
 
-export const getAllUsers = async (req: AuthRequest, res: Response) => {
-  try {
-    const users = await prisma.user.findMany({
-      select: { id: true, email: true, role: true, createdAt: true, updatedAt: true },
-    });
-    res.json({ users });
-  } catch (error) {
-    console.error('Get all users error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
-
-export const updateUserRole = async (req: AuthRequest, res: Response) => {
-  try {
-    const { userId } = req.params;
-    const { role } = req.body;
-    if (!['ADMIN', 'USER'].includes(role)) {
-      return res.status(400).json({ error: 'Invalid role' });
-    }
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: { role },
-      select: { id: true, email: true, role: true, updatedAt: true },
-    });
-    res.json({ message: 'User role updated successfully', user: updatedUser });
-  } catch (error) {
-    console.error('Update user role error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-}; 
+ 

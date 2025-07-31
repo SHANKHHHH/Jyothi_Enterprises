@@ -6,7 +6,6 @@ export interface AuthRequest extends Request {
   user?: {
     id: string;
     email: string;
-    role: string;
   };
 }
 
@@ -25,13 +24,12 @@ export const authenticateToken = async (
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as {
       userId: string;
-      role: string;
     };
 
     // Get user from database to ensure they still exist
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: { id: true, email: true, role: true },
+      select: { id: true, email: true },
     });
 
     if (!user) {
@@ -45,22 +43,4 @@ export const authenticateToken = async (
   }
 };
 
-export const requireAdmin = (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-) => {
-  if (req.user?.role !== 'ADMIN') {
-    return res.status(403).json({ error: 'Admin access required' });
-  }
-  next();
-};
-
-export const requireRole = (role: string) => {
-  return (req: AuthRequest, res: Response, next: NextFunction) => {
-    if (req.user?.role !== role) {
-      return res.status(403).json({ error: `${role} access required` });
-    }
-    next();
-  };
-}; 
+ 
