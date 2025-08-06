@@ -47,8 +47,4 @@ export const env = {
 };
 
 // Log environment status
-console.log(' Environment variables loaded successfully');
-console.log(` Environment: ${env.NODE_ENV}`);
-console.log(` Server will run on port: ${env.PORT}`);
-
-export default env; 
+export default env;    
