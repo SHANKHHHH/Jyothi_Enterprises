@@ -15,6 +15,15 @@ export interface ContactFormData {
   endTimePeriod: string;
 }
 
+// Introduce yourself form data interface
+export interface IntroduceYourselfData {
+  name: string;
+  mobileNumber: string;
+  email: string;
+  gst: string;
+  additionalDocument: string | null;
+}
+
 // Booking data interface
 export interface BookingData {
   id: string;
@@ -175,6 +184,33 @@ export class EmailService {
       return await this.sendToEmail(userEmail, formData.name, text, html);
     } catch (error) {
       console.error('Error sending quote confirmation to user:', error);
+      return false;
+    }
+  }
+
+  // Send introduce yourself email to admins
+  async sendIntroduceYourselfEmail(formData: IntroduceYourselfData): Promise<boolean> {
+    try {
+      // Create email content
+      const emailContent = this.generateIntroduceYourselfEmailContent(formData);
+      const htmlContent = this.generateIntroduceYourselfHTMLContent(formData);
+      
+      // Send emails sequentially with delays to avoid rate limiting
+      const email1 = await this.sendToEmail('gdhruv579@gmail.com', formData.name, emailContent, htmlContent);
+      await this.delay(500); // Wait 500ms
+      const email2 = await this.sendToEmail('dhruvgupfa523@gmail.com', formData.name, emailContent, htmlContent);
+
+      const allSent = email1 && email2;
+      
+      if (allSent) {
+        console.log('Introduce yourself emails sent successfully to gdhruv579@gmail.com and dhruvgupfa523@gmail.com');
+        return true;
+      } else {
+        console.error('Failed to send some introduce yourself emails');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error sending introduce yourself email:', error);
       return false;
     }
   }
@@ -643,6 +679,67 @@ Jyoti Enterprises Team
         <p>If you have any questions, reply to this email or call us at <b>+91 99000 22300</b>.</p>
         <p>Best regards,<br>Jyoti Enterprises Team</p>
       </body></html>
+    `;
+  }
+
+  // Generate introduce yourself email content
+  private generateIntroduceYourselfEmailContent(formData: IntroduceYourselfData): string {
+    return `
+Introduce Yourself Request
+
+A new introduce yourself request has been submitted through the Jyoti website.
+
+Customer Details:
+- Name: ${formData.name}
+- Mobile Number: ${formData.mobileNumber}
+- Email: ${formData.email}
+${formData.gst ? `- GST: ${formData.gst}` : ''}
+
+Additional Document:
+${formData.additionalDocument ? `- Document Type: ${formData.additionalDocument}` : 'No additional document provided.'}
+
+---
+This email was sent from the Jyoti website introduce yourself form
+Contact: +91 99000 22300 | gdhruv579@gmail.com
+    `;
+  }
+
+  // Generate introduce yourself HTML content
+  private generateIntroduceYourselfHTMLContent(formData: IntroduceYourselfData): string {
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Introduce Yourself Request</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background-color: #ff6b35; color: white; padding: 20px; text-align: center; }
+          .content { background-color: #f9f9f9; padding: 20px; }
+          .footer { background-color: #333; color: white; padding: 15px; text-align: center; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Introduce Yourself Request</h1>
+            <p>From: ${formData.name}</p>
+          </div>
+          <div class="content">
+            <p><strong>Name:</strong> ${formData.name}</p>
+            <p><strong>Mobile Number:</strong> ${formData.mobileNumber}</p>
+            <p><strong>Email:</strong> ${formData.email}</p>
+            ${formData.gst ? `<p><strong>GST:</strong> ${formData.gst}</p>` : ''}
+            ${formData.additionalDocument ? `<p><strong>Additional Document:</strong> ${formData.additionalDocument}</p>` : ''}
+          </div>
+          <div class="footer">
+            <p>This email was sent from the Jyoti website introduce yourself form</p>
+            <p>Contact: +91 99000 22300 | gdhruv579@gmail.com</p>
+          </div>
+        </div>
+      </body>
+      </html>
     `;
   }
 
