@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
-import prisma, { dbManager } from '../config/database';
+import prisma from '../config/database';
 import emailService from '../services/emailService';
 
 // Validation rules for booking submission
@@ -86,10 +86,8 @@ export const bookingValidation = [
 // Get all services
 export const getServices = async (req: Request, res: Response) => {
   try {
-    const services = await dbManager.executeQuery(async () => {
-      return await prisma.service.findMany({
-        orderBy: { name: 'asc' },
-      });
+    const services = await prisma.service.findMany({
+      orderBy: { name: 'asc' },
     });
 
     return res.status(200).json({
@@ -108,10 +106,8 @@ export const getServices = async (req: Request, res: Response) => {
 // Get all event types
 export const getEventTypes = async (req: Request, res: Response) => {
   try {
-    const eventTypes = await dbManager.executeQuery(async () => {
-      return await prisma.eventType.findMany({
-        orderBy: { name: 'asc' },
-      });
+    const eventTypes = await prisma.eventType.findMany({
+      orderBy: { name: 'asc' },
     });
 
     return res.status(200).json({
@@ -141,9 +137,7 @@ export const addEventType = async (req: Request, res: Response) => {
     const { name } = req.body;
 
     // Check if event type already exists
-    const existing = await dbManager.executeQuery(async () => {
-      return await prisma.eventType.findFirst({ where: { name: name.trim() } });
-    });
+    const existing = await prisma.eventType.findFirst({ where: { name: name.trim() } });
 
     if (existing) {
       return res.status(400).json({
@@ -152,9 +146,7 @@ export const addEventType = async (req: Request, res: Response) => {
       });
     }
 
-    const eventType = await dbManager.executeQuery(async () => {
-      return await prisma.eventType.create({ data: { name: name.trim() } });
-    });
+    const eventType = await prisma.eventType.create({ data: { name: name.trim() } });
 
     return res.status(201).json({
       success: true,
@@ -199,65 +191,61 @@ export const submitBooking = async (req: Request, res: Response) => {
     } = req.body;
 
     // Create the main booking
-    const booking = await dbManager.executeQuery(async () => {
-      return await prisma.booking.create({
-        data: {
-          name,
-          mobile,
-          email,
-          gst,
-          paxCount,
-          attendants,
-          toilets,
-          location,
-          startDate: new Date(startDate),
-          endDate: new Date(endDate),
-          startTime,
-          endTime,
-        },
-      });
+    const booking = await prisma.booking.create({
+      data: {
+        name,
+        mobile,
+        email,
+        gst,
+        paxCount,
+        attendants,
+        toilets,
+        location,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        startTime,
+        endTime,
+      },
     });
 
     // Create booking with relations
-    const bookingWithRelations = await dbManager.executeQuery(async () => {
-      return await prisma.booking.create({
-        data: {
-          name,
-          mobile,
-          email,
-          gst,
-          paxCount,
-          attendants,
-          toilets,
-          location,
-          startDate: new Date(startDate),
-          endDate: new Date(endDate),
-          startTime,
-          endTime,
-          services: {
-            create: serviceIds.map((serviceId: string) => ({
-              service: { connect: { id: serviceId } },
-            })),
-          },
-          events: {
-            create: eventTypeIds.map((eventTypeId: string) => ({
-              eventType: { connect: { id: eventTypeId } },
-            })),
+    const bookingWithRelations = await prisma.booking.create({
+      data: {
+        name,
+        mobile,
+        email,
+        gst,
+        paxCount,
+        attendants,
+        toilets,
+        location,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        startTime,
+        endTime,
+        services: {
+          create: serviceIds.map((serviceId: string) => ({
+            service: { connect: { id: serviceId } },
+          })),
+        },
+        events: {
+          create: eventTypeIds.map((eventTypeId: string) => ({
+            eventType: { connect: { id: eventTypeId } },
+          })),
+        },
+      },
+      include: {
+        services: {
+          include: {
+            service: true,
           },
         },
-        include: {
-          services: {
-            include: {
-              service: true,
-            },
-          },
-          events: {
-            include: {
-              eventType: true,
-            },
+        events: {
+          include: {
+            eventType: true,
           },
         },
-      });
+      },
     });
 
     // Send email notification to admins
@@ -311,22 +299,20 @@ export const submitBooking = async (req: Request, res: Response) => {
 // Get all bookings (admin only)
 export const getAllBookings = async (req: Request, res: Response) => {
   try {
-    const bookings = await dbManager.executeQuery(async () => {
-      return await prisma.booking.findMany({
-        include: {
-          services: {
-            include: {
-              service: true,
-            },
-          },
-          events: {
-            include: {
-              eventType: true,
-            },
+    const bookings = await prisma.booking.findMany({
+      include: {
+        services: {
+          include: {
+            service: true,
           },
         },
-        orderBy: { createdAt: 'desc' },
-      });
+        events: {
+          include: {
+            eventType: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
     });
 
     return res.status(200).json({
@@ -347,22 +333,20 @@ export const getBooking = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const booking = await dbManager.executeQuery(async () => {
-      return await prisma.booking.findUnique({
-        where: { id },
-        include: {
-          services: {
-            include: {
-              service: true,
-            },
-          },
-          events: {
-            include: {
-              eventType: true,
-            },
+    const booking = await prisma.booking.findUnique({
+      where: { id },
+      include: {
+        services: {
+          include: {
+            service: true,
           },
         },
-      });
+        events: {
+          include: {
+            eventType: true,
+          },
+        },
+      },
     });
 
     if (!booking) {

@@ -1,44 +1,11 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getOrder = exports.getAllOrders = exports.checkout = exports.clearCart = exports.removeFromCart = exports.updateCartItem = exports.addToCart = exports.getCart = exports.checkoutValidation = exports.updateCartItemValidation = exports.cartItemValidation = void 0;
 const express_validator_1 = require("express-validator");
-const database_1 = __importStar(require("../config/database"));
+const database_1 = __importDefault(require("../config/database"));
 const emailService_1 = __importDefault(require("../services/emailService"));
 // Validation rules for cart operations
 exports.cartItemValidation = [
@@ -71,9 +38,19 @@ exports.checkoutValidation = [
 ];
 // Get or create cart for session
 const getOrCreateCart = async (sessionId) => {
-    let cart = await database_1.dbManager.executeQuery(async () => {
-        return await database_1.default.cart.findFirst({
-            where: { sessionId },
+    let cart = await database_1.default.cart.findFirst({
+        where: { sessionId },
+        include: {
+            items: {
+                include: {
+                    product: true,
+                },
+            },
+        },
+    });
+    if (!cart) {
+        cart = await database_1.default.cart.create({
+            data: { sessionId },
             include: {
                 items: {
                     include: {
@@ -81,20 +58,6 @@ const getOrCreateCart = async (sessionId) => {
                     },
                 },
             },
-        });
-    });
-    if (!cart) {
-        cart = await database_1.dbManager.executeQuery(async () => {
-            return await database_1.default.cart.create({
-                data: { sessionId },
-                include: {
-                    items: {
-                        include: {
-                            product: true,
-                        },
-                    },
-                },
-            });
         });
     }
     return cart;
@@ -156,35 +119,29 @@ const addToCart = async (req, res) => {
         }
         const cart = await getOrCreateCart(sessionId);
         // Check if item already exists in cart
-        const existingItem = await database_1.dbManager.executeQuery(async () => {
-            return await database_1.default.cartItem.findUnique({
-                where: {
-                    cartId_productId: {
-                        cartId: cart.id,
-                        productId,
-                    },
+        const existingItem = await database_1.default.cartItem.findUnique({
+            where: {
+                cartId_productId: {
+                    cartId: cart.id,
+                    productId,
                 },
-            });
+            },
         });
         if (existingItem) {
             // Update quantity
-            await database_1.dbManager.executeQuery(async () => {
-                return await database_1.default.cartItem.update({
-                    where: { id: existingItem.id },
-                    data: { quantity: existingItem.quantity + quantity },
-                });
+            await database_1.default.cartItem.update({
+                where: { id: existingItem.id },
+                data: { quantity: existingItem.quantity + quantity },
             });
         }
         else {
             // Add new item
-            await database_1.dbManager.executeQuery(async () => {
-                return await database_1.default.cartItem.create({
-                    data: {
-                        cartId: cart.id,
-                        productId,
-                        quantity,
-                    },
-                });
+            await database_1.default.cartItem.create({
+                data: {
+                    cartId: cart.id,
+                    productId,
+                    quantity,
+                },
             });
         }
         // Get updated cart
@@ -229,25 +186,21 @@ const updateCartItem = async (req, res) => {
         const cart = await getOrCreateCart(sessionId);
         if (quantity === 0) {
             // Remove item from cart
-            await database_1.dbManager.executeQuery(async () => {
-                return await database_1.default.cartItem.deleteMany({
-                    where: {
-                        cartId: cart.id,
-                        productId,
-                    },
-                });
+            await database_1.default.cartItem.deleteMany({
+                where: {
+                    cartId: cart.id,
+                    productId,
+                },
             });
         }
         else {
             // Update quantity
-            await database_1.dbManager.executeQuery(async () => {
-                return await database_1.default.cartItem.updateMany({
-                    where: {
-                        cartId: cart.id,
-                        productId,
-                    },
-                    data: { quantity },
-                });
+            await database_1.default.cartItem.updateMany({
+                where: {
+                    cartId: cart.id,
+                    productId,
+                },
+                data: { quantity },
             });
         }
         // Get updated cart
@@ -282,13 +235,11 @@ const removeFromCart = async (req, res) => {
             });
         }
         const cart = await getOrCreateCart(sessionId);
-        await database_1.dbManager.executeQuery(async () => {
-            return await database_1.default.cartItem.deleteMany({
-                where: {
-                    cartId: cart.id,
-                    productId,
-                },
-            });
+        await database_1.default.cartItem.deleteMany({
+            where: {
+                cartId: cart.id,
+                productId,
+            },
         });
         // Get updated cart
         const updatedCart = await getOrCreateCart(sessionId);
@@ -321,10 +272,8 @@ const clearCart = async (req, res) => {
             });
         }
         const cart = await getOrCreateCart(sessionId);
-        await database_1.dbManager.executeQuery(async () => {
-            return await database_1.default.cartItem.deleteMany({
-                where: { cartId: cart.id },
-            });
+        await database_1.default.cartItem.deleteMany({
+            where: { cartId: cart.id },
         });
         return res.status(200).json({
             success: true,
@@ -372,35 +321,31 @@ const checkout = async (req, res) => {
             return sum + (Number(price) * item.quantity);
         }, 0);
         // Create order
-        const order = await database_1.dbManager.executeQuery(async () => {
-            return await database_1.default.order.create({
-                data: {
-                    cartId: cart.id,
-                    customerName,
-                    customerEmail,
-                    customerPhone,
-                    totalAmount,
-                    items: {
-                        create: cart.items.map(item => ({
-                            productId: item.productId,
-                            quantity: item.quantity,
-                        })),
-                    },
+        const order = await database_1.default.order.create({
+            data: {
+                cartId: cart.id,
+                customerName,
+                customerEmail,
+                customerPhone,
+                totalAmount,
+                items: {
+                    create: cart.items.map(item => ({
+                        productId: item.productId,
+                        quantity: item.quantity,
+                    })),
                 },
-            });
+            },
         });
         // Fetch the order with product data for email sending
-        const orderWithProducts = await database_1.dbManager.executeQuery(async () => {
-            return await database_1.default.order.findUnique({
-                where: { id: order.id },
-                include: {
-                    items: {
-                        include: {
-                            product: true,
-                        },
+        const orderWithProducts = await database_1.default.order.findUnique({
+            where: { id: order.id },
+            include: {
+                items: {
+                    include: {
+                        product: true,
                     },
                 },
-            });
+            },
         });
         // Send order notification email to admins
         await emailService_1.default.sendOrderNotificationToAdmins({
@@ -463,17 +408,15 @@ exports.checkout = checkout;
 // Get all orders (admin only)
 const getAllOrders = async (req, res) => {
     try {
-        const orders = await database_1.dbManager.executeQuery(async () => {
-            return await database_1.default.order.findMany({
-                include: {
-                    items: {
-                        include: {
-                            product: true,
-                        },
+        const orders = await database_1.default.order.findMany({
+            include: {
+                items: {
+                    include: {
+                        product: true,
                     },
                 },
-                orderBy: { createdAt: 'desc' },
-            });
+            },
+            orderBy: { createdAt: 'desc' },
         });
         return res.status(200).json({
             success: true,
@@ -493,17 +436,15 @@ exports.getAllOrders = getAllOrders;
 const getOrder = async (req, res) => {
     try {
         const { id } = req.params;
-        const order = await database_1.dbManager.executeQuery(async () => {
-            return await database_1.default.order.findUnique({
-                where: { id },
-                include: {
-                    items: {
-                        include: {
-                            product: true,
-                        },
+        const order = await database_1.default.order.findUnique({
+            where: { id },
+            include: {
+                items: {
+                    include: {
+                        product: true,
                     },
                 },
-            });
+            },
         });
         if (!order) {
             return res.status(404).json({

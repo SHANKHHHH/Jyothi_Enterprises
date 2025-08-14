@@ -1,7 +1,6 @@
 import { Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import emailService, { ContactFormData } from '../services/emailService';
-import prisma, { dbManager } from '../config/database';
 
 // Validation rules for contact form
 export const contactFormValidation = [

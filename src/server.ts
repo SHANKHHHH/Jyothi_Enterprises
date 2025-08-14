@@ -2,59 +2,61 @@
 import './preload-env';
 import { env } from './preload-env';
 
-import express, { Application, Request, Response, NextFunction } from 'express';
+import express from 'express';
 import cors from 'cors';
 import authRoutes from './routes/auth';
-import contactRoutes from './routes/contact';
-import bookingRoutes from './routes/booking';
 import cartRoutes from './routes/cart';
-import prisma, { dbManager } from './config/database';
+import bookingRoutes from './routes/booking';
+import contactRoutes from './routes/contact';
+import prisma from './config/database';
 
-const app: Application = express();
-const PORT = env.PORT;
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-// Enable CORS for all origins
+// Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/cart', cartRoutes);
+app.use('/api/booking', bookingRoutes);
+app.use('/api/contact', contactRoutes);
+
 // Health check endpoint
-app.get('/health', (req: Request, res: Response) => {
+app.get('/health', (req, res) => {
   res.json({
     status: 'OK',
     message: 'Server is running',
     timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
 // Database health check endpoint
-app.get('/health/db', async (req: Request, res: Response) => {
+app.get('/health/db', async (req, res) => {
   try {
     if (!prisma) {
       throw new Error('Database client not initialized');
     }
-    
-    // Use the executeQuery method that handles prepared statement errors
-    const result = await dbManager.executeQuery(async () => {
-      // Test database connection
-      await prisma.$queryRaw`SELECT 1`;
-      
-      // Test if we can query the database (without assuming specific table names)
-      const tables = await prisma.$queryRaw`
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public'
-      `;
-      
-      return tables;
-    });
-    
+
+    // Test database connection
+    await prisma.$queryRaw`SELECT 1`;
+
+    // Test if we can query the database (without assuming specific table names)
+    const tables = await prisma.$queryRaw`
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = 'public'
+    `;
+
     res.json({
       status: 'OK',
       message: 'Database connected successfully',
       database: {
         connected: true,
-        tableCount: Array.isArray(result) ? result.length : 'Unknown',
+        tableCount: Array.isArray(tables) ? tables.length : 'Unknown',
         timestamp: new Date().toISOString()
       }
     });
@@ -70,44 +72,24 @@ app.get('/health/db', async (req: Request, res: Response) => {
   }
 });
 
-// Test endpoint for debugging
-app.get('/test', (req: Request, res: Response) => {
+// Test endpoint to display environment variables and server status
+app.get('/test', (req, res) => {
   res.json({
-    message: 'Test endpoint working',
+    message: 'Server is working!',
     timestamp: new Date().toISOString(),
-    environment: env.NODE_ENV,
-    databaseUrl: env.DATABASE_URL ? 'Set' : 'Not set',
-    jwtSecret: env.JWT_SECRET ? 'Set' : 'Not set'
+    environment: process.env.NODE_ENV || 'development',
+    port: PORT,
+    databaseUrl: process.env.DATABASE_URL ? 'Set' : 'Not set',
+    jwtSecret: process.env.JWT_SECRET ? 'Set' : 'Not set',
+    resendApiKey: process.env.RESEND_API_KEY ? 'Set' : 'Not set'
   });
 });
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/contact', contactRoutes);
-app.use('/api', bookingRoutes);
-app.use('/api', cartRoutes);
-
-// 404 handler
-app.use('*', (req: Request, res: Response) => {
-  res.status(404).json({ error: 'Route not found' });
-});
-
-// Error handler
-app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error('Error:', error);
-  res.status(500).json({ error: 'Internal server error' });
-});
-
+// Start server
 app.listen(PORT, () => {
-  console.log(` Server running on port ${PORT}`);
-  console.log(` Environment: ${env.NODE_ENV}`);
-  console.log(` Health check: http://localhost:${PORT}/health`);
-  console.log(` Database health: http://localhost:${PORT}/health/db`);
-  console.log(` Test endpoint: http://localhost:${PORT}/test`);
-  console.log(` Auth endpoints: http://localhost:${PORT}/api/auth`);
-  console.log(` Contact endpoints: http://localhost:${PORT}/api/contact`);
-  console.log(` Booking endpoints: http://localhost:${PORT}/api/services, /api/events, /api/bookings`);
-  console.log(` Cart endpoints: http://localhost:${PORT}/api/cart, /api/checkout, /api/orders`);
-});
-
-export default app; 
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+  console.log(`🔗 Database health: http://localhost:${PORT}/health/db`);
+  console.log(`🔗 Test endpoint: http://localhost:${PORT}/test`);
+}); 
