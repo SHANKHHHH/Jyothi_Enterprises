@@ -3,11 +3,10 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getBooking = exports.getAllBookings = exports.createBooking = exports.getEventTypes = exports.getServices = exports.bookingValidation = void 0;
+exports.getBooking = exports.getAllBookings = exports.createBooking = exports.addEventType = exports.getEventTypes = exports.getServices = exports.bookingValidation = void 0;
 const express_validator_1 = require("express-validator");
-const client_1 = require("@prisma/client");
+const database_1 = __importDefault(require("../config/database"));
 const emailService_1 = __importDefault(require("../services/emailService"));
-const prisma = new client_1.PrismaClient();
 // Validation rules for booking submission
 exports.bookingValidation = [
     (0, express_validator_1.body)('name')
@@ -75,7 +74,7 @@ exports.bookingValidation = [
 // Get all services
 const getServices = async (req, res) => {
     try {
-        const services = await prisma.service.findMany({
+        const services = await database_1.default.service.findMany({
             orderBy: { name: 'asc' },
         });
         return res.status(200).json({
@@ -95,7 +94,7 @@ exports.getServices = getServices;
 // Get all event types
 const getEventTypes = async (req, res) => {
     try {
-        const eventTypes = await prisma.eventType.findMany({
+        const eventTypes = await database_1.default.eventType.findMany({
             orderBy: { name: 'asc' },
         });
         return res.status(200).json({
@@ -112,6 +111,40 @@ const getEventTypes = async (req, res) => {
     }
 };
 exports.getEventTypes = getEventTypes;
+// Add a new event type (open to all users)
+const addEventType = async (req, res) => {
+    try {
+        const { name } = req.body;
+        if (!name || typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 100) {
+            return res.status(400).json({
+                success: false,
+                message: 'Event type name must be between 2 and 100 characters',
+            });
+        }
+        // Check if event type already exists
+        const existing = await database_1.default.eventType.findFirst({ where: { name: name.trim() } });
+        if (existing) {
+            return res.status(409).json({
+                success: false,
+                message: 'Event type already exists',
+            });
+        }
+        const eventType = await database_1.default.eventType.create({ data: { name: name.trim() } });
+        return res.status(201).json({
+            success: true,
+            message: 'Event type added successfully',
+            data: eventType,
+        });
+    }
+    catch (error) {
+        console.error('Error adding event type:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to add event type',
+        });
+    }
+};
+exports.addEventType = addEventType;
 // Submit a new booking
 const createBooking = async (req, res) => {
     try {
@@ -126,7 +159,7 @@ const createBooking = async (req, res) => {
         }
         const { name, mobile, email, gst, paxCount, attendants, toilets, location, startDate, endDate, startTime, endTime, serviceIds, eventTypeIds, } = req.body;
         // Create the booking with relations
-        const booking = await prisma.booking.create({
+        const booking = await database_1.default.booking.create({
             data: {
                 name,
                 mobile,
@@ -183,6 +216,16 @@ const createBooking = async (req, res) => {
             services: booking.services,
             events: booking.events,
         });
+        // Send confirmation email to user
+        await emailService_1.default.sendBookingConfirmationToUser(booking.email, {
+            ...booking,
+            gst: booking.gst ?? undefined,
+            attendants: booking.attendants ?? undefined,
+            toilets: booking.toilets ?? undefined,
+            location: booking.location ?? undefined,
+            startTime: booking.startTime ?? undefined,
+            endTime: booking.endTime ?? undefined,
+        });
         return res.status(201).json({
             success: true,
             message: 'Booking submitted successfully! We will contact you soon.',
@@ -205,7 +248,7 @@ exports.createBooking = createBooking;
 // Get all bookings (admin only)
 const getAllBookings = async (req, res) => {
     try {
-        const bookings = await prisma.booking.findMany({
+        const bookings = await database_1.default.booking.findMany({
             include: {
                 services: {
                     include: {
@@ -238,7 +281,7 @@ exports.getAllBookings = getAllBookings;
 const getBooking = async (req, res) => {
     try {
         const { id } = req.params;
-        const booking = await prisma.booking.findUnique({
+        const booking = await database_1.default.booking.findUnique({
             where: { id },
             include: {
                 services: {

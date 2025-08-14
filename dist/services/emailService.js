@@ -12,18 +12,21 @@ class EmailService {
         }
         this.resend = new resend_1.Resend(apiKey);
     }
+    // Helper function to add delay
+    async delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
     // Send contact form email
     async sendContactFormEmail(formData) {
         try {
             // Create email content
             const emailContent = this.generateEmailContent(formData);
             const htmlContent = this.generateHTMLContent(formData.name, emailContent);
-            // Send to both email addresses
-            const emailsSent = await Promise.all([
-                this.sendToEmail('gdhruv579@gmail.com', formData.name, emailContent, htmlContent),
-                this.sendToEmail('dhruvgupfa523@gmail.com', formData.name, emailContent, htmlContent)
-            ]);
-            const allSent = emailsSent.every(sent => sent === true);
+            // Send emails sequentially with delays to avoid rate limiting
+            const email1 = await this.sendToEmail('gdhruv579@gmail.com', formData.name, emailContent, htmlContent);
+            await this.delay(500); // Wait 500ms
+            const email2 = await this.sendToEmail('dhruvgupfa523@gmail.com', formData.name, emailContent, htmlContent);
+            const allSent = email1 && email2;
             if (allSent) {
                 console.log('Emails sent successfully to gdhruv579@gmail.com and dhruvgupfa523@gmail.com');
                 return true;
@@ -90,6 +93,70 @@ class EmailService {
             return false;
         }
     }
+    // Send confirmation email to user for quote request
+    async sendQuoteConfirmationToUser(userEmail, formData) {
+        try {
+            const subject = 'Your Quote Request Received - Jyoti Enterprises';
+            const text = this.generateUserQuoteConfirmationText(formData);
+            const html = this.generateUserQuoteConfirmationHTML(formData);
+            return await this.sendToEmail(userEmail, formData.name, text, html);
+        }
+        catch (error) {
+            console.error('Error sending quote confirmation to user:', error);
+            return false;
+        }
+    }
+    // Send introduce yourself email to admins
+    async sendIntroduceYourselfEmail(formData) {
+        try {
+            // Create email content
+            const emailContent = this.generateIntroduceYourselfEmailContent(formData);
+            const htmlContent = this.generateIntroduceYourselfHTMLContent(formData);
+            // Send emails sequentially with delays to avoid rate limiting
+            const email1 = await this.sendToEmail('gdhruv579@gmail.com', formData.name, emailContent, htmlContent);
+            await this.delay(500); // Wait 500ms
+            const email2 = await this.sendToEmail('dhruvgupfa523@gmail.com', formData.name, emailContent, htmlContent);
+            const allSent = email1 && email2;
+            if (allSent) {
+                console.log('Introduce yourself emails sent successfully to gdhruv579@gmail.com and dhruvgupfa523@gmail.com');
+                return true;
+            }
+            else {
+                console.error('Failed to send some introduce yourself emails');
+                return false;
+            }
+        }
+        catch (error) {
+            console.error('Error sending introduce yourself email:', error);
+            return false;
+        }
+    }
+    // Send confirmation email to user for booking
+    async sendBookingConfirmationToUser(userEmail, booking) {
+        try {
+            const subject = 'Your Booking Received - Jyoti Enterprises';
+            const text = this.generateUserBookingConfirmationText(booking);
+            const html = this.generateUserBookingConfirmationHTML(booking);
+            return await this.sendToEmail(userEmail, booking.name, text, html);
+        }
+        catch (error) {
+            console.error('Error sending booking confirmation to user:', error);
+            return false;
+        }
+    }
+    // Send confirmation email to user for order
+    async sendOrderConfirmationToUser(userEmail, order) {
+        try {
+            const subject = 'Your Order Confirmation - Jyoti Enterprises';
+            const text = this.generateUserOrderConfirmationText(order);
+            const html = this.generateUserOrderConfirmationHTML(order);
+            return await this.sendToEmail(userEmail, order.customerName, text, html);
+        }
+        catch (error) {
+            console.error('Error sending order confirmation to user:', error);
+            return false;
+        }
+    }
     // Send email to a specific address using Resend
     async sendToEmail(toEmail, customerName, textContent, htmlContent) {
         try {
@@ -100,7 +167,7 @@ class EmailService {
             }
             // Send email using Resend
             const { data, error } = await this.resend.emails.send({
-                from: 'Jyoti Website <onboarding@resend.dev>', // This should be your verified domain
+                from: 'onboarding@resend.dev', // Using verified domain
                 to: [toEmail],
                 subject: `New Quote Request - ${customerName}`,
                 text: textContent,
@@ -387,6 +454,184 @@ ${itemsList}
 ---
 This email was sent from the Jyoti website shopping cart
 Contact: +91 99000 22300 | gdhruv579@gmail.com
+    `;
+    }
+    // Generate user quote confirmation text
+    generateUserQuoteConfirmationText(formData) {
+        return `
+Dear ${formData.name},
+
+Thank you for requesting a quote from Jyoti Enterprises. We have received your request and will contact you soon.
+
+Quote Details:
+- Name: ${formData.name}
+- Mobile Number: ${formData.mobileNumber}
+- Type of Products: ${formData.productType}
+- Event Type: ${formData.eventType}
+- Pax Count: ${formData.paxCount}
+- Start Date: ${formData.startDate}
+- End Date: ${formData.endDate}
+
+If you have any questions, reply to this email or call us at +91 99000 22300.
+
+Best regards,
+Jyoti Enterprises Team
+`;
+    }
+    // Generate user quote confirmation HTML
+    generateUserQuoteConfirmationHTML(formData) {
+        return `
+      <html><body>
+        <h2>Thank you for your quote request, ${formData.name}!</h2>
+        <p>We have received your request and will contact you soon.</p>
+        <h3>Quote Details:</h3>
+        <ul>
+          <li><b>Name:</b> ${formData.name}</li>
+          <li><b>Mobile Number:</b> ${formData.mobileNumber}</li>
+          <li><b>Type of Products:</b> ${formData.productType}</li>
+          <li><b>Event Type:</b> ${formData.eventType}</li>
+          <li><b>Pax Count:</b> ${formData.paxCount}</li>
+          <li><b>Start Date:</b> ${formData.startDate}</li>
+          <li><b>End Date:</b> ${formData.endDate}</li>
+        </ul>
+        <p>If you have any questions, reply to this email or call us at <b>+91 99000 22300</b>.</p>
+        <p>Best regards,<br>Jyoti Enterprises Team</p>
+      </body></html>
+    `;
+    }
+    // Generate user booking confirmation text
+    generateUserBookingConfirmationText(booking) {
+        return `
+Dear ${booking.name},
+
+Thank you for booking with Jyoti Enterprises. We have received your booking and will contact you soon.
+
+Booking Details:
+- Booking ID: ${booking.id}
+- Event Types: ${booking.events.map(e => e.eventType.name).join(', ')}
+- Services: ${booking.services.map(s => s.service.name).join(', ')}
+- Pax Count: ${booking.paxCount}
+- Start Date: ${booking.startDate.toLocaleDateString()}
+- End Date: ${booking.endDate.toLocaleDateString()}
+
+If you have any questions, reply to this email or call us at +91 99000 22300.
+
+Best regards,
+Jyoti Enterprises Team
+`;
+    }
+    // Generate user booking confirmation HTML
+    generateUserBookingConfirmationHTML(booking) {
+        return `
+      <html><body>
+        <h2>Thank you for your booking, ${booking.name}!</h2>
+        <p>We have received your booking and will contact you soon.</p>
+        <h3>Booking Details:</h3>
+        <ul>
+          <li><b>Booking ID:</b> ${booking.id}</li>
+          <li><b>Event Types:</b> ${booking.events.map(e => e.eventType.name).join(', ')}</li>
+          <li><b>Services:</b> ${booking.services.map(s => s.service.name).join(', ')}</li>
+          <li><b>Pax Count:</b> ${booking.paxCount}</li>
+          <li><b>Start Date:</b> ${booking.startDate.toLocaleDateString()}</li>
+          <li><b>End Date:</b> ${booking.endDate.toLocaleDateString()}</li>
+        </ul>
+        <p>If you have any questions, reply to this email or call us at <b>+91 99000 22300</b>.</p>
+        <p>Best regards,<br>Jyoti Enterprises Team</p>
+      </body></html>
+    `;
+    }
+    // Generate user order confirmation text
+    generateUserOrderConfirmationText(order) {
+        return `
+Dear ${order.customerName},
+
+Thank you for your order with Jyoti Enterprises. We have received your order and will contact you soon.
+
+Order Details:
+- Order ID: ${order.id}
+- Total Amount: ₹${order.totalAmount.toFixed(2)}
+- Order Date: ${order.createdAt.toLocaleString()}
+
+If you have any questions, reply to this email or call us at +91 99000 22300.
+
+Best regards,
+Jyoti Enterprises Team
+`;
+    }
+    // Generate user order confirmation HTML
+    generateUserOrderConfirmationHTML(order) {
+        return `
+      <html><body>
+        <h2>Thank you for your order, ${order.customerName}!</h2>
+        <p>We have received your order and will contact you soon.</p>
+        <h3>Order Details:</h3>
+        <ul>
+          <li><b>Order ID:</b> ${order.id}</li>
+          <li><b>Total Amount:</b> ₹${order.totalAmount.toFixed(2)}</li>
+          <li><b>Order Date:</b> ${order.createdAt.toLocaleString()}</li>
+        </ul>
+        <p>If you have any questions, reply to this email or call us at <b>+91 99000 22300</b>.</p>
+        <p>Best regards,<br>Jyoti Enterprises Team</p>
+      </body></html>
+    `;
+    }
+    // Generate introduce yourself email content
+    generateIntroduceYourselfEmailContent(formData) {
+        return `
+Introduce Yourself Request
+
+A new introduce yourself request has been submitted through the Jyoti website.
+
+Customer Details:
+- Name: ${formData.name}
+- Mobile Number: ${formData.mobileNumber}
+- Email: ${formData.email}
+${formData.gst ? `- GST: ${formData.gst}` : ''}
+
+Additional Document:
+${formData.additionalDocument ? `- Document Type: ${formData.additionalDocument}` : 'No additional document provided.'}
+
+---
+This email was sent from the Jyoti website introduce yourself form
+Contact: +91 99000 22300 | gdhruv579@gmail.com
+    `;
+    }
+    // Generate introduce yourself HTML content
+    generateIntroduceYourselfHTMLContent(formData) {
+        return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Introduce Yourself Request</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background-color: #ff6b35; color: white; padding: 20px; text-align: center; }
+          .content { background-color: #f9f9f9; padding: 20px; }
+          .footer { background-color: #333; color: white; padding: 15px; text-align: center; font-size: 12px; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Introduce Yourself Request</h1>
+            <p>From: ${formData.name}</p>
+          </div>
+          <div class="content">
+            <p><strong>Name:</strong> ${formData.name}</p>
+            <p><strong>Mobile Number:</strong> ${formData.mobileNumber}</p>
+            <p><strong>Email:</strong> ${formData.email}</p>
+            ${formData.gst ? `<p><strong>GST:</strong> ${formData.gst}</p>` : ''}
+            ${formData.additionalDocument ? `<p><strong>Additional Document:</strong> ${formData.additionalDocument}</p>` : ''}
+          </div>
+          <div class="footer">
+            <p>This email was sent from the Jyoti website introduce yourself form</p>
+            <p>Contact: +91 99000 22300 | gdhruv579@gmail.com</p>
+          </div>
+        </div>
+      </body>
+      </html>
     `;
     }
     // Test email service

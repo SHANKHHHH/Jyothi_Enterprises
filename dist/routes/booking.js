@@ -10,6 +10,8 @@ const router = express_1.default.Router();
 router.get('/services', bookingController_1.getServices);
 // Get all event types
 router.get('/events', bookingController_1.getEventTypes);
+// Add a new event type (open to all users)
+router.post('/events', bookingController_1.addEventType);
 // Submit a new booking
 router.post('/bookings', bookingController_1.bookingValidation, bookingController_1.createBooking);
 // Get all bookings (admin only)

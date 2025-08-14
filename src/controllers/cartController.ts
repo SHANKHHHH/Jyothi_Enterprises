@@ -10,16 +10,6 @@ export const cartItemValidation = [
     .notEmpty()
     .withMessage('Product ID is required'),
   
-  body('productName')
-    .isString()
-    .trim()
-    .isLength({ min: 1, max: 100 })
-    .withMessage('Product name must be between 1 and 100 characters'),
-  
-  body('price')
-    .isFloat({ min: 0 })
-    .withMessage('Price must be a positive number'),
-  
   body('quantity')
     .isInt({ min: 1 })
     .withMessage('Quantity must be at least 1'),
@@ -53,7 +43,11 @@ const getOrCreateCart = async (sessionId: string) => {
   let cart = await prisma.cart.findFirst({
     where: { sessionId },
     include: {
-      items: true,
+      items: {
+        include: {
+          product: true,
+        },
+      },
     },
   });
 
@@ -61,7 +55,11 @@ const getOrCreateCart = async (sessionId: string) => {
     cart = await prisma.cart.create({
       data: { sessionId },
       include: {
-        items: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
       },
     });
   }
@@ -86,7 +84,7 @@ export const getCart = async (req: Request, res: Response) => {
     // Calculate totals
     const totalItems = cart.items.reduce((sum, item) => sum + item.quantity, 0);
     const totalAmount = cart.items.reduce((sum, item) => {
-      const price = item.originalPrice || item.price;
+      const price = item.product.originalPrice || item.product.price;
       return sum + (Number(price) * item.quantity);
     }, 0);
 
@@ -123,11 +121,6 @@ export const addToCart = async (req: Request, res: Response) => {
     const sessionId = req.headers['session-id'] as string || req.query.sessionId as string;
     const { 
       productId, 
-      productName, 
-      description, 
-      price, 
-      originalPrice, 
-      imageUrl, 
       quantity 
     } = req.body;
 
@@ -162,11 +155,6 @@ export const addToCart = async (req: Request, res: Response) => {
         data: {
           cartId: cart.id,
           productId,
-          productName,
-          description,
-          price,
-          originalPrice,
-          imageUrl,
           quantity,
         },
       });
@@ -204,9 +192,8 @@ export const updateCartItem = async (req: Request, res: Response) => {
       });
     }
 
-    const { itemId } = req.params;
-    const { quantity } = req.body;
     const sessionId = req.headers['session-id'] as string || req.query.sessionId as string;
+    const { productId, quantity } = req.body;
 
     if (!sessionId) {
       return res.status(400).json({
@@ -215,33 +202,23 @@ export const updateCartItem = async (req: Request, res: Response) => {
       });
     }
 
-    // Check if item belongs to user's cart
-    const cartItem = await prisma.cartItem.findFirst({
-      where: {
-        id: itemId,
-        cart: { sessionId },
-      },
-      include: {
-        cart: true,
-      },
-    });
+    const cart = await getOrCreateCart(sessionId);
 
-    if (!cartItem) {
-      return res.status(404).json({
-        success: false,
-        message: 'Cart item not found',
-      });
-    }
-
-    if (quantity <= 0) {
-      // Remove item if quantity is 0 or negative
-      await prisma.cartItem.delete({
-        where: { id: itemId },
+    if (quantity === 0) {
+      // Remove item from cart
+      await prisma.cartItem.deleteMany({
+        where: {
+          cartId: cart.id,
+          productId,
+        },
       });
     } else {
       // Update quantity
-      await prisma.cartItem.update({
-        where: { id: itemId },
+      await prisma.cartItem.updateMany({
+        where: {
+          cartId: cart.id,
+          productId,
+        },
         data: { quantity },
       });
     }
@@ -261,7 +238,7 @@ export const updateCartItem = async (req: Request, res: Response) => {
     console.error('Error updating cart item:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to update cart',
+      message: 'Failed to update cart item',
     });
   }
 };
@@ -269,8 +246,8 @@ export const updateCartItem = async (req: Request, res: Response) => {
 // Remove item from cart
 export const removeFromCart = async (req: Request, res: Response) => {
   try {
-    const { itemId } = req.params;
     const sessionId = req.headers['session-id'] as string || req.query.sessionId as string;
+    const { productId } = req.params;
 
     if (!sessionId) {
       return res.status(400).json({
@@ -279,23 +256,13 @@ export const removeFromCart = async (req: Request, res: Response) => {
       });
     }
 
-    // Check if item belongs to user's cart
-    const cartItem = await prisma.cartItem.findFirst({
+    const cart = await getOrCreateCart(sessionId);
+
+    await prisma.cartItem.deleteMany({
       where: {
-        id: itemId,
-        cart: { sessionId },
+        cartId: cart.id,
+        productId,
       },
-    });
-
-    if (!cartItem) {
-      return res.status(404).json({
-        success: false,
-        message: 'Cart item not found',
-      });
-    }
-
-    await prisma.cartItem.delete({
-      where: { id: itemId },
     });
 
     // Get updated cart
@@ -314,6 +281,37 @@ export const removeFromCart = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to remove item from cart',
+    });
+  }
+};
+
+// Clear cart
+export const clearCart = async (req: Request, res: Response) => {
+  try {
+    const sessionId = req.headers['session-id'] as string || req.query.sessionId as string;
+
+    if (!sessionId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Session ID is required',
+      });
+    }
+
+    const cart = await getOrCreateCart(sessionId);
+
+    await prisma.cartItem.deleteMany({
+      where: { cartId: cart.id },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Cart cleared successfully',
+    });
+  } catch (error) {
+    console.error('Error clearing cart:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to clear cart',
     });
   }
 };
@@ -340,15 +338,9 @@ export const checkout = async (req: Request, res: Response) => {
       });
     }
 
-    // Get cart with items
-    const cart = await prisma.cart.findFirst({
-      where: { sessionId },
-      include: {
-        items: true,
-      },
-    });
+    const cart = await getOrCreateCart(sessionId);
 
-    if (!cart || cart.items.length === 0) {
+    if (cart.items.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'Cart is empty',
@@ -357,7 +349,7 @@ export const checkout = async (req: Request, res: Response) => {
 
     // Calculate total amount
     const totalAmount = cart.items.reduce((sum, item) => {
-      const price = item.originalPrice || item.price;
+      const price = item.product.originalPrice || item.product.price;
       return sum + (Number(price) * item.quantity);
     }, 0);
 
@@ -372,56 +364,60 @@ export const checkout = async (req: Request, res: Response) => {
         items: {
           create: cart.items.map(item => ({
             productId: item.productId,
-            productName: item.productName,
-            description: item.description,
-            price: Number(item.price),
-            originalPrice: item.originalPrice ? Number(item.originalPrice) : null,
-            imageUrl: item.imageUrl,
             quantity: item.quantity,
           })),
         },
       },
+    });
+
+    // Fetch the order with product data for email sending
+    const orderWithProducts = await prisma.order.findUnique({
+      where: { id: order.id },
       include: {
-        items: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
       },
     });
 
     // Send order notification email to admins
     await emailService.sendOrderNotificationToAdmins({
-      id: order.id,
-      customerName: order.customerName,
-      customerEmail: order.customerEmail,
-      customerPhone: order.customerPhone,
-      totalAmount: Number(order.totalAmount),
-      status: order.status,
-      createdAt: order.createdAt,
-      items: order.items.map(item => ({
+      id: orderWithProducts!.id,
+      customerName: orderWithProducts!.customerName,
+      customerEmail: orderWithProducts!.customerEmail,
+      customerPhone: orderWithProducts!.customerPhone,
+      totalAmount: Number(orderWithProducts!.totalAmount),
+      status: orderWithProducts!.status,
+      createdAt: orderWithProducts!.createdAt,
+      items: orderWithProducts!.items.map(item => ({
         quantity: item.quantity,
-        price: Number(item.price),
+        price: Number(item.product.price),
         product: {
-          id: item.productId,
-          name: item.productName,
-          description: item.description || undefined,
+          id: item.product.id,
+          name: item.product.name,
+          description: item.product.description || undefined,
         },
       })),
     });
 
     // Send confirmation email to user
-    await emailService.sendOrderConfirmationToUser(order.customerEmail, {
-      id: order.id,
-      customerName: order.customerName,
-      customerEmail: order.customerEmail,
-      customerPhone: order.customerPhone,
-      totalAmount: Number(order.totalAmount),
-      status: order.status,
-      createdAt: order.createdAt,
-      items: order.items.map(item => ({
+    await emailService.sendOrderConfirmationToUser(orderWithProducts!.customerEmail, {
+      id: orderWithProducts!.id,
+      customerName: orderWithProducts!.customerName,
+      customerEmail: orderWithProducts!.customerEmail,
+      customerPhone: orderWithProducts!.customerPhone,
+      totalAmount: Number(orderWithProducts!.totalAmount),
+      status: orderWithProducts!.status,
+      createdAt: orderWithProducts!.createdAt,
+      items: orderWithProducts!.items.map(item => ({
         quantity: item.quantity,
-        price: Number(item.price),
+        price: Number(item.product.price),
         product: {
-          id: item.productId,
-          name: item.productName,
-          description: item.description || undefined,
+          id: item.product.id,
+          name: item.product.name,
+          description: item.product.description || undefined,
         },
       })),
     });
@@ -450,7 +446,11 @@ export const getAllOrders = async (req: Request, res: Response) => {
   try {
     const orders = await prisma.order.findMany({
       include: {
-        items: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -476,7 +476,11 @@ export const getOrder = async (req: Request, res: Response) => {
     const order = await prisma.order.findUnique({
       where: { id },
       include: {
-        items: true,
+        items: {
+          include: {
+            product: true,
+          },
+        },
       },
     });
 
@@ -498,4 +502,4 @@ export const getOrder = async (req: Request, res: Response) => {
       message: 'Failed to fetch order',
     });
   }
-}; 
+};

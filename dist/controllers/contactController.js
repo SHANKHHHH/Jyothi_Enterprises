@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getContactInfo = exports.testEmailService = exports.submitContactForm = exports.contactFormValidation = void 0;
+exports.introduceYourself = exports.getContactInfo = exports.testEmailService = exports.submitContactForm = exports.introduceYourselfValidation = exports.contactFormValidation = void 0;
 const express_validator_1 = require("express-validator");
 const emailService_1 = __importDefault(require("../services/emailService"));
 // Validation rules for contact form
@@ -53,6 +53,27 @@ exports.contactFormValidation = [
         .isIn(['AM', 'PM'])
         .withMessage('End time period must be AM or PM'),
 ];
+// Validation rules for introduce yourself form
+exports.introduceYourselfValidation = [
+    (0, express_validator_1.body)('name')
+        .trim()
+        .isLength({ min: 2, max: 50 })
+        .withMessage('Name must be between 2 and 50 characters'),
+    (0, express_validator_1.body)('mobileNumber')
+        .trim()
+        .matches(/^(\+91\s?)?[0-9]{10}$/)
+        .withMessage('Please enter a valid Indian mobile number'),
+    (0, express_validator_1.body)('email')
+        .trim()
+        .isEmail()
+        .normalizeEmail()
+        .withMessage('Please enter a valid email address'),
+    (0, express_validator_1.body)('gst')
+        .optional()
+        .trim()
+        .isLength({ min: 15, max: 15 })
+        .withMessage('GST number must be exactly 15 characters'),
+];
 // Submit contact form
 const submitContactForm = async (req, res) => {
     try {
@@ -81,6 +102,8 @@ const submitContactForm = async (req, res) => {
         };
         // Send email
         const emailSent = await emailService_1.default.sendContactFormEmail(formData);
+        // Send confirmation email to user
+        await emailService_1.default.sendQuoteConfirmationToUser(req.body.email, formData);
         if (emailSent) {
             return res.status(200).json({
                 success: true,
@@ -162,3 +185,52 @@ const getContactInfo = async (req, res) => {
     }
 };
 exports.getContactInfo = getContactInfo;
+// Introduce yourself endpoint
+const introduceYourself = async (req, res) => {
+    try {
+        // Check for validation errors
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array(),
+            });
+        }
+        // Extract form data
+        const formData = {
+            name: req.body.name,
+            mobileNumber: req.body.mobileNumber,
+            email: req.body.email,
+            gst: req.body.gst || '',
+            additionalDocument: req.file ? req.file.filename : null,
+        };
+        // Send email notification to admins
+        const emailSent = await emailService_1.default.sendIntroduceYourselfEmail(formData);
+        if (emailSent) {
+            return res.status(200).json({
+                success: true,
+                message: 'Introduction submitted successfully! We will contact you soon.',
+                data: {
+                    submittedAt: new Date().toISOString(),
+                    customerName: formData.name,
+                    hasDocument: !!formData.additionalDocument,
+                },
+            });
+        }
+        else {
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to send email. Please try again later.',
+            });
+        }
+    }
+    catch (error) {
+        console.error('Introduce yourself submission error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Internal server error. Please try again later.',
+        });
+    }
+};
+exports.introduceYourself = introduceYourself;
