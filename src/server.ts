@@ -9,6 +9,7 @@ import contactRoutes from './routes/contact';
 import bookingRoutes from './routes/booking';
 import cartRoutes from './routes/cart';
 import prisma from './config/database';
+import { dbErrorHandler } from './middleware/dbErrorHandler';
 
 const app: Application = express();
 const PORT = env.PORT;
@@ -81,6 +82,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api', bookingRoutes);
 app.use('/api', cartRoutes);
+
+// Database error handler middleware (should be before 404 handler)
+app.use(dbErrorHandler);
 
 // 404 handler
 app.use('*', (req: Request, res: Response) => {

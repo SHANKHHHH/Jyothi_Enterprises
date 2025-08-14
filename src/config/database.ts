@@ -5,12 +5,14 @@ declare global {
 }
 
 class DatabaseManager {
+  private static instance: DatabaseManager;
   private prisma: PrismaClient;
   private retryCount = 0;
   private maxRetries = 3;
   private isConnected = false;
+  private connectionPromise: Promise<void> | null = null;
 
-  constructor() {
+  private constructor() {
     this.prisma = new PrismaClient({
       log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
       datasources: {
@@ -21,7 +23,24 @@ class DatabaseManager {
     });
   }
 
+  public static getInstance(): DatabaseManager {
+    if (!DatabaseManager.instance) {
+      DatabaseManager.instance = new DatabaseManager();
+    }
+    return DatabaseManager.instance;
+  }
+
   async connect() {
+    // Prevent multiple simultaneous connection attempts
+    if (this.connectionPromise) {
+      return this.connectionPromise;
+    }
+
+    this.connectionPromise = this._connect();
+    return this.connectionPromise;
+  }
+
+  private async _connect(): Promise<void> {
     try {
       await this.prisma.$connect();
       this.isConnected = true;
@@ -32,10 +51,15 @@ class DatabaseManager {
       if (this.retryCount < this.maxRetries) {
         this.retryCount++;
         console.log(`Retrying connection... (${this.retryCount}/${this.maxRetries})`);
-        setTimeout(() => this.connect(), 5000);
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        return this._connect();
       } else {
         console.error('Max retry attempts reached. Database connection failed.');
+        throw error;
       }
+    } finally {
+      this.connectionPromise = null;
     }
   }
 
@@ -58,10 +82,53 @@ class DatabaseManager {
   isConnectedToDb() {
     return this.isConnected;
   }
+
+  // Method to reset connection (useful for handling prepared statement errors)
+  async resetConnection() {
+    try {
+      console.log('Resetting database connection...');
+      await this.disconnect();
+      this.retryCount = 0;
+      
+      // Create a new Prisma client instance to clear any prepared statements
+      this.prisma = new PrismaClient({
+        log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+        datasources: {
+          db: {
+            url: process.env.DATABASE_URL,
+          },
+        },
+      });
+      
+      await this.connect();
+      console.log('Database connection reset successfully');
+    } catch (error) {
+      console.error('Failed to reset database connection:', error);
+      throw error;
+    }
+  }
+
+  // Periodic health check to prevent connection issues
+  startHealthCheck() {
+    setInterval(async () => {
+      try {
+        if (this.isConnected) {
+          await this.prisma.$queryRaw`SELECT 1`;
+        }
+      } catch (error) {
+        console.log('Health check failed, attempting to reconnect...');
+        try {
+          await this.resetConnection();
+        } catch (resetError) {
+          console.error('Failed to reconnect during health check:', resetError);
+        }
+      }
+    }, 30000); // Check every 30 seconds
+  }
 }
 
-// Initialize database manager
-const dbManager = new DatabaseManager();
+// Initialize database manager as singleton
+const dbManager = DatabaseManager.getInstance();
 
 // Set global instance for development hot reload
 if (process.env.NODE_ENV !== 'production') {
@@ -69,7 +136,14 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Connect to database
-dbManager.connect();
+dbManager.connect().catch(error => {
+  console.error('Failed to connect to database:', error);
+});
+
+// Start periodic health check after initial connection
+setTimeout(() => {
+  dbManager.startHealthCheck();
+}, 5000); // Start health check 5 seconds after initialization
 
 // Handle graceful shutdown
 process.on('beforeExit', async () => {
@@ -109,3 +183,4 @@ if (!prisma) {
 }
 
 export default prisma;
+export { dbManager };

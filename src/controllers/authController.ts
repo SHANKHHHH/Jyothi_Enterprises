@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
-import prisma from '../config/database';
+import prisma, { dbManager } from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 
 export const signupValidation = [
@@ -29,7 +29,29 @@ export const signup = async (req: Request, res: Response) => {
     }
 
     const { email, password } = req.body;
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    
+    let existingUser;
+    try {
+      existingUser = await prisma.user.findUnique({ where: { email } });
+    } catch (dbError: any) {
+      // Handle prepared statement error specifically
+      if (dbError?.message?.includes('prepared statement') || 
+          dbError?.code === '42P05' ||
+          dbError?.message?.includes('already exists')) {
+        console.log('Prepared statement error detected, resetting connection...');
+        try {
+          await dbManager.resetConnection();
+          // Retry the query after resetting connection
+          existingUser = await prisma.user.findUnique({ where: { email } });
+        } catch (retryError) {
+          console.error('Retry failed after connection reset:', retryError);
+          return res.status(500).json({ error: 'Database connection error, please try again' });
+        }
+      } else {
+        throw dbError;
+      }
+    }
+    
     if (existingUser) {
       return res.status(400).json({ error: 'User with this email already exists' });
     }
@@ -64,7 +86,29 @@ export const login = async (req: Request, res: Response) => {
     }
 
     const { email, password } = req.body;
-    const user = await prisma.user.findUnique({ where: { email } });
+    
+    let user;
+    try {
+      user = await prisma.user.findUnique({ where: { email } });
+    } catch (dbError: any) {
+      // Handle prepared statement error specifically
+      if (dbError?.message?.includes('prepared statement') || 
+          dbError?.code === '42P05' ||
+          dbError?.message?.includes('already exists')) {
+        console.log('Prepared statement error detected, resetting connection...');
+        try {
+          await dbManager.resetConnection();
+          // Retry the query after resetting connection
+          user = await prisma.user.findUnique({ where: { email } });
+        } catch (retryError) {
+          console.error('Retry failed after connection reset:', retryError);
+          return res.status(500).json({ error: 'Database connection error, please try again' });
+        }
+      } else {
+        throw dbError;
+      }
+    }
+    
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
@@ -96,10 +140,34 @@ export const login = async (req: Request, res: Response) => {
 
 export const getProfile = async (req: AuthRequest, res: Response) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user?.id },
-      select: { id: true, email: true, createdAt: true, updatedAt: true },
-    });
+    let user;
+    try {
+      user = await prisma.user.findUnique({
+        where: { id: req.user?.id },
+        select: { id: true, email: true, createdAt: true, updatedAt: true },
+      });
+    } catch (dbError: any) {
+      // Handle prepared statement error specifically
+      if (dbError?.message?.includes('prepared statement') || 
+          dbError?.code === '42P05' ||
+          dbError?.message?.includes('already exists')) {
+        console.log('Prepared statement error detected, resetting connection...');
+        try {
+          await dbManager.resetConnection();
+          // Retry the query after resetting connection
+          user = await prisma.user.findUnique({
+            where: { id: req.user?.id },
+            select: { id: true, email: true, createdAt: true, updatedAt: true },
+          });
+        } catch (retryError) {
+          console.error('Retry failed after connection reset:', retryError);
+          return res.status(500).json({ error: 'Database connection error, please try again' });
+        }
+      } else {
+        throw dbError;
+      }
+    }
+    
     res.json({ user });
   } catch (error) {
     console.error('Get profile error:', error);

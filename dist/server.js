@@ -13,6 +13,7 @@ const contact_1 = __importDefault(require("./routes/contact"));
 const booking_1 = __importDefault(require("./routes/booking"));
 const cart_1 = __importDefault(require("./routes/cart"));
 const database_1 = __importDefault(require("./config/database"));
+const dbErrorHandler_1 = require("./middleware/dbErrorHandler");
 const app = (0, express_1.default)();
 const PORT = preload_env_1.env.PORT;
 // Enable CORS for all origins
@@ -77,6 +78,8 @@ app.use('/api/auth', auth_1.default);
 app.use('/api/contact', contact_1.default);
 app.use('/api', booking_1.default);
 app.use('/api', cart_1.default);
+// Database error handler middleware (should be before 404 handler)
+app.use(dbErrorHandler_1.dbErrorHandler);
 // 404 handler
 app.use('*', (req, res) => {
     res.status(404).json({ error: 'Route not found' });
