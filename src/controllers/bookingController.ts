@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
-import prisma from '../config/database';
+import prisma, { dbManager } from '../config/database';
 import emailService from '../services/emailService';
 
 // Validation rules for booking submission
@@ -86,8 +86,10 @@ export const bookingValidation = [
 // Get all services
 export const getServices = async (req: Request, res: Response) => {
   try {
-    const services = await prisma.service.findMany({
-      orderBy: { name: 'asc' },
+    const services = await dbManager.executeQuery(async () => {
+      return await prisma.service.findMany({
+        orderBy: { name: 'asc' },
+      });
     });
 
     return res.status(200).json({
@@ -106,8 +108,10 @@ export const getServices = async (req: Request, res: Response) => {
 // Get all event types
 export const getEventTypes = async (req: Request, res: Response) => {
   try {
-    const eventTypes = await prisma.eventType.findMany({
-      orderBy: { name: 'asc' },
+    const eventTypes = await dbManager.executeQuery(async () => {
+      return await prisma.eventType.findMany({
+        orderBy: { name: 'asc' },
+      });
     });
 
     return res.status(200).json({
@@ -123,29 +127,39 @@ export const getEventTypes = async (req: Request, res: Response) => {
   }
 };
 
-// Add a new event type (open to all users)
+// Add new event type
 export const addEventType = async (req: Request, res: Response) => {
   try {
-    const { name } = req.body;
-    if (!name || typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 100) {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
-        message: 'Event type name must be between 2 and 100 characters',
+        errors: errors.array(),
       });
     }
+
+    const { name } = req.body;
+
     // Check if event type already exists
-    const existing = await prisma.eventType.findFirst({ where: { name: name.trim() } });
+    const existing = await dbManager.executeQuery(async () => {
+      return await prisma.eventType.findFirst({ where: { name: name.trim() } });
+    });
+
     if (existing) {
-      return res.status(409).json({
+      return res.status(400).json({
         success: false,
-        message: 'Event type already exists',
+        message: 'Event type with this name already exists',
       });
     }
-    const eventType = await prisma.eventType.create({ data: { name: name.trim() } });
+
+    const eventType = await dbManager.executeQuery(async () => {
+      return await prisma.eventType.create({ data: { name: name.trim() } });
+    });
+
     return res.status(201).json({
       success: true,
-      message: 'Event type added successfully',
       data: eventType,
+      message: 'Event type added successfully',
     });
   } catch (error) {
     console.error('Error adding event type:', error);
@@ -157,14 +171,12 @@ export const addEventType = async (req: Request, res: Response) => {
 };
 
 // Submit a new booking
-export const createBooking = async (req: Request, res: Response) => {
+export const submitBooking = async (req: Request, res: Response) => {
   try {
-    // Check for validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
         success: false,
-        message: 'Validation failed',
         errors: errors.array(),
       });
     }
@@ -186,83 +198,105 @@ export const createBooking = async (req: Request, res: Response) => {
       eventTypeIds,
     } = req.body;
 
-    // Create the booking with relations
-    const booking = await prisma.booking.create({
-      data: {
-        name,
-        mobile,
-        email,
-        gst,
-        paxCount,
-        attendants,
-        toilets,
-        location,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
-        startTime,
-        endTime,
-        services: {
-          create: serviceIds.map((serviceId: string) => ({
-            service: { connect: { id: serviceId } },
-          })),
+    // Create the main booking
+    const booking = await dbManager.executeQuery(async () => {
+      return await prisma.booking.create({
+        data: {
+          name,
+          mobile,
+          email,
+          gst,
+          paxCount,
+          attendants,
+          toilets,
+          location,
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+          startTime,
+          endTime,
         },
-        events: {
-          create: eventTypeIds.map((eventTypeId: string) => ({
-            eventType: { connect: { id: eventTypeId } },
-          })),
-        },
-      },
-      include: {
-        services: {
-          include: {
-            service: true,
+      });
+    });
+
+    // Create booking with relations
+    const bookingWithRelations = await dbManager.executeQuery(async () => {
+      return await prisma.booking.create({
+        data: {
+          name,
+          mobile,
+          email,
+          gst,
+          paxCount,
+          attendants,
+          toilets,
+          location,
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+          startTime,
+          endTime,
+          services: {
+            create: serviceIds.map((serviceId: string) => ({
+              service: { connect: { id: serviceId } },
+            })),
+          },
+          events: {
+            create: eventTypeIds.map((eventTypeId: string) => ({
+              eventType: { connect: { id: eventTypeId } },
+            })),
           },
         },
-        events: {
-          include: {
-            eventType: true,
+        include: {
+          services: {
+            include: {
+              service: true,
+            },
+          },
+          events: {
+            include: {
+              eventType: true,
+            },
           },
         },
-      },
+      });
     });
 
     // Send email notification to admins
     await emailService.sendBookingNotificationToAdmins({
-      id: booking.id,
-      name: booking.name,
-      mobile: booking.mobile,
-      email: booking.email,
-      gst: booking.gst || undefined,
-      paxCount: booking.paxCount,
-      attendants: booking.attendants || undefined,
-      toilets: booking.toilets || undefined,
-      location: booking.location || undefined,
-      startDate: booking.startDate,
-      endDate: booking.endDate,
-      startTime: booking.startTime || undefined,
-      endTime: booking.endTime || undefined,
-      createdAt: booking.createdAt,
-      services: booking.services,
-      events: booking.events,
+      id: bookingWithRelations.id,
+      name: bookingWithRelations.name,
+      mobile: bookingWithRelations.mobile,
+      email: bookingWithRelations.email,
+      gst: bookingWithRelations.gst || undefined,
+      paxCount: bookingWithRelations.paxCount,
+      attendants: bookingWithRelations.attendants || undefined,
+      toilets: bookingWithRelations.toilets || undefined,
+      location: bookingWithRelations.location || undefined,
+      startDate: bookingWithRelations.startDate,
+      endDate: bookingWithRelations.endDate,
+      startTime: bookingWithRelations.startTime || undefined,
+      endTime: bookingWithRelations.endTime || undefined,
+      createdAt: bookingWithRelations.createdAt,
+      services: bookingWithRelations.services,
+      events: bookingWithRelations.events,
     });
     // Send confirmation email to user
-    await emailService.sendBookingConfirmationToUser(booking.email, {
-      ...booking,
-      gst: booking.gst ?? undefined,
-      attendants: booking.attendants ?? undefined,
-      toilets: booking.toilets ?? undefined,
-      location: booking.location ?? undefined,
-      startTime: booking.startTime ?? undefined,
-      endTime: booking.endTime ?? undefined,
+    await emailService.sendBookingConfirmationToUser(bookingWithRelations.email, {
+      ...bookingWithRelations,
+      gst: bookingWithRelations.gst ?? undefined,
+      attendants: bookingWithRelations.attendants ?? undefined,
+      toilets: bookingWithRelations.toilets ?? undefined,
+      location: bookingWithRelations.location ?? undefined,
+      startTime: bookingWithRelations.startTime ?? undefined,
+      endTime: bookingWithRelations.endTime ?? undefined,
     });
 
     return res.status(201).json({
       success: true,
       message: 'Booking submitted successfully! We will contact you soon.',
       data: {
-        bookingId: booking.id,
-        submittedAt: booking.createdAt,
-        customerName: booking.name,
+        bookingId: bookingWithRelations.id,
+        submittedAt: bookingWithRelations.createdAt,
+        customerName: bookingWithRelations.name,
       },
     });
   } catch (error) {
@@ -277,20 +311,22 @@ export const createBooking = async (req: Request, res: Response) => {
 // Get all bookings (admin only)
 export const getAllBookings = async (req: Request, res: Response) => {
   try {
-    const bookings = await prisma.booking.findMany({
-      include: {
-        services: {
-          include: {
-            service: true,
+    const bookings = await dbManager.executeQuery(async () => {
+      return await prisma.booking.findMany({
+        include: {
+          services: {
+            include: {
+              service: true,
+            },
+          },
+          events: {
+            include: {
+              eventType: true,
+            },
           },
         },
-        events: {
-          include: {
-            eventType: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'desc' },
+      });
     });
 
     return res.status(200).json({
@@ -311,20 +347,22 @@ export const getBooking = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const booking = await prisma.booking.findUnique({
-      where: { id },
-      include: {
-        services: {
-          include: {
-            service: true,
+    const booking = await dbManager.executeQuery(async () => {
+      return await prisma.booking.findUnique({
+        where: { id },
+        include: {
+          services: {
+            include: {
+              service: true,
+            },
+          },
+          events: {
+            include: {
+              eventType: true,
+            },
           },
         },
-        events: {
-          include: {
-            eventType: true,
-          },
-        },
-      },
+      });
     });
 
     if (!booking) {

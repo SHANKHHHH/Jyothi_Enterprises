@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
 import emailService, { ContactFormData } from '../services/emailService';
+import prisma, { dbManager } from '../config/database';
 
 // Validation rules for contact form
 export const contactFormValidation = [
@@ -98,46 +99,27 @@ export const submitContactForm = async (req: Request, res: Response) => {
       });
     }
 
-    // Extract form data
-    const formData: ContactFormData = {
-      name: req.body.name,
-      mobileNumber: req.body.mobileNumber,
-      productType: req.body.productType,
-      eventType: req.body.eventType,
-      paxCount: req.body.paxCount,
-      startDate: req.body.startDate,
-      startTime: req.body.startTime,
-      startTimePeriod: req.body.startTimePeriod,
-      endDate: req.body.endDate,
-      endTime: req.body.endTime,
-      endTimePeriod: req.body.endTimePeriod,
-    };
+    const formData: ContactFormData = req.body;
 
-    // Send email
-    const emailSent = await emailService.sendContactFormEmail(formData);
-    // Send confirmation email to user
-    await emailService.sendQuoteConfirmationToUser(req.body.email, formData);
+    // Save to database if needed (optional)
+    // const contact = await dbManager.executeQuery(async () => {
+    //   return await prisma.contact.create({
+    //     data: formData
+    //   });
+    // });
 
-    if (emailSent) {
-      return res.status(200).json({
-        success: true,
-        message: 'Quote request submitted successfully! We will contact you soon.',
-        data: {
-          submittedAt: new Date().toISOString(),
-          customerName: formData.name,
-        },
-      });
-    } else {
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to send email. Please try again later.',
-      });
-    }
+    // Send email notification
+    await emailService.sendContactFormEmail(formData);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Contact form submitted successfully! We will contact you soon.',
+    });
   } catch (error) {
     console.error('Contact form submission error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error. Please try again later.',
+      message: 'Failed to submit contact form. Please try again later.',
     });
   }
 };

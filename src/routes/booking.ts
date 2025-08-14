@@ -2,7 +2,7 @@ import express from 'express';
 import {
   getServices,
   getEventTypes,
-  createBooking,
+  submitBooking,
   getAllBookings,
   getBooking,
   bookingValidation,
@@ -20,7 +20,7 @@ router.get('/events', getEventTypes);
 router.post('/events', addEventType);
 
 // Submit a new booking
-router.post('/bookings', bookingValidation, createBooking);
+router.post('/bookings', bookingValidation, submitBooking);
 
 // Get all bookings (admin only)
 router.get('/bookings', getAllBookings);

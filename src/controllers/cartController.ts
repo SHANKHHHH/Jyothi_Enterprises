@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { body, validationResult } from 'express-validator';
-import prisma from '../config/database';
+import prisma, { dbManager } from '../config/database';
 import emailService from '../services/emailService';
 
 // Validation rules for cart operations
@@ -40,20 +40,9 @@ export const checkoutValidation = [
 
 // Get or create cart for session
 const getOrCreateCart = async (sessionId: string) => {
-  let cart = await prisma.cart.findFirst({
-    where: { sessionId },
-    include: {
-      items: {
-        include: {
-          product: true,
-        },
-      },
-    },
-  });
-
-  if (!cart) {
-    cart = await prisma.cart.create({
-      data: { sessionId },
+  let cart = await dbManager.executeQuery(async () => {
+    return await prisma.cart.findFirst({
+      where: { sessionId },
       include: {
         items: {
           include: {
@@ -61,6 +50,21 @@ const getOrCreateCart = async (sessionId: string) => {
           },
         },
       },
+    });
+  });
+
+  if (!cart) {
+    cart = await dbManager.executeQuery(async () => {
+      return await prisma.cart.create({
+        data: { sessionId },
+        include: {
+          items: {
+            include: {
+              product: true,
+            },
+          },
+        },
+      });
     });
   }
 
@@ -82,8 +86,8 @@ export const getCart = async (req: Request, res: Response) => {
     const cart = await getOrCreateCart(sessionId);
 
     // Calculate totals
-    const totalItems = cart.items.reduce((sum, item) => sum + item.quantity, 0);
-    const totalAmount = cart.items.reduce((sum, item) => {
+    const totalItems = cart.items.reduce((sum: number, item: any) => sum + item.quantity, 0);
+    const totalAmount = cart.items.reduce((sum: number, item: any) => {
       const price = item.product.originalPrice || item.product.price;
       return sum + (Number(price) * item.quantity);
     }, 0);
@@ -98,10 +102,10 @@ export const getCart = async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('Error fetching cart:', error);
+    console.error('Get cart error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to fetch cart',
+      message: 'Failed to get cart',
     });
   }
 };
@@ -134,29 +138,35 @@ export const addToCart = async (req: Request, res: Response) => {
     const cart = await getOrCreateCart(sessionId);
 
     // Check if item already exists in cart
-    const existingItem = await prisma.cartItem.findUnique({
-      where: {
-        cartId_productId: {
-          cartId: cart.id,
-          productId,
+    const existingItem = await dbManager.executeQuery(async () => {
+      return await prisma.cartItem.findUnique({
+        where: {
+          cartId_productId: {
+            cartId: cart.id,
+            productId,
+          },
         },
-      },
+      });
     });
 
     if (existingItem) {
       // Update quantity
-      await prisma.cartItem.update({
-        where: { id: existingItem.id },
-        data: { quantity: existingItem.quantity + quantity },
+      await dbManager.executeQuery(async () => {
+        return await prisma.cartItem.update({
+          where: { id: existingItem.id },
+          data: { quantity: existingItem.quantity + quantity },
+        });
       });
     } else {
       // Add new item
-      await prisma.cartItem.create({
-        data: {
-          cartId: cart.id,
-          productId,
-          quantity,
-        },
+      await dbManager.executeQuery(async () => {
+        return await prisma.cartItem.create({
+          data: {
+            cartId: cart.id,
+            productId,
+            quantity,
+          },
+        });
       });
     }
 
@@ -206,20 +216,24 @@ export const updateCartItem = async (req: Request, res: Response) => {
 
     if (quantity === 0) {
       // Remove item from cart
-      await prisma.cartItem.deleteMany({
-        where: {
-          cartId: cart.id,
-          productId,
-        },
+      await dbManager.executeQuery(async () => {
+        return await prisma.cartItem.deleteMany({
+          where: {
+            cartId: cart.id,
+            productId,
+          },
+        });
       });
     } else {
       // Update quantity
-      await prisma.cartItem.updateMany({
-        where: {
-          cartId: cart.id,
-          productId,
-        },
-        data: { quantity },
+      await dbManager.executeQuery(async () => {
+        return await prisma.cartItem.updateMany({
+          where: {
+            cartId: cart.id,
+            productId,
+          },
+          data: { quantity },
+        });
       });
     }
 
@@ -258,11 +272,13 @@ export const removeFromCart = async (req: Request, res: Response) => {
 
     const cart = await getOrCreateCart(sessionId);
 
-    await prisma.cartItem.deleteMany({
-      where: {
-        cartId: cart.id,
-        productId,
-      },
+    await dbManager.executeQuery(async () => {
+      return await prisma.cartItem.deleteMany({
+        where: {
+          cartId: cart.id,
+          productId,
+        },
+      });
     });
 
     // Get updated cart
@@ -299,8 +315,10 @@ export const clearCart = async (req: Request, res: Response) => {
 
     const cart = await getOrCreateCart(sessionId);
 
-    await prisma.cartItem.deleteMany({
-      where: { cartId: cart.id },
+    await dbManager.executeQuery(async () => {
+      return await prisma.cartItem.deleteMany({
+        where: { cartId: cart.id },
+      });
     });
 
     return res.status(200).json({
@@ -348,38 +366,42 @@ export const checkout = async (req: Request, res: Response) => {
     }
 
     // Calculate total amount
-    const totalAmount = cart.items.reduce((sum, item) => {
+    const totalAmount = cart.items.reduce((sum: number, item: any) => {
       const price = item.product.originalPrice || item.product.price;
       return sum + (Number(price) * item.quantity);
     }, 0);
 
     // Create order
-    const order = await prisma.order.create({
-      data: {
-        cartId: cart.id,
-        customerName,
-        customerEmail,
-        customerPhone,
-        totalAmount,
-        items: {
-          create: cart.items.map(item => ({
-            productId: item.productId,
-            quantity: item.quantity,
-          })),
+    const order = await dbManager.executeQuery(async () => {
+      return await prisma.order.create({
+        data: {
+          cartId: cart.id,
+          customerName,
+          customerEmail,
+          customerPhone,
+          totalAmount,
+          items: {
+            create: cart.items.map(item => ({
+              productId: item.productId,
+              quantity: item.quantity,
+            })),
+          },
         },
-      },
+      });
     });
 
     // Fetch the order with product data for email sending
-    const orderWithProducts = await prisma.order.findUnique({
-      where: { id: order.id },
-      include: {
-        items: {
-          include: {
-            product: true,
+    const orderWithProducts = await dbManager.executeQuery(async () => {
+      return await prisma.order.findUnique({
+        where: { id: order.id },
+        include: {
+          items: {
+            include: {
+              product: true,
+            },
           },
         },
-      },
+      });
     });
 
     // Send order notification email to admins
@@ -444,15 +466,17 @@ export const checkout = async (req: Request, res: Response) => {
 // Get all orders (admin only)
 export const getAllOrders = async (req: Request, res: Response) => {
   try {
-    const orders = await prisma.order.findMany({
-      include: {
-        items: {
-          include: {
-            product: true,
+    const orders = await dbManager.executeQuery(async () => {
+      return await prisma.order.findMany({
+        include: {
+          items: {
+            include: {
+              product: true,
+            },
           },
         },
-      },
-      orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'desc' },
+      });
     });
 
     return res.status(200).json({
@@ -473,15 +497,17 @@ export const getOrder = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const order = await prisma.order.findUnique({
-      where: { id },
-      include: {
-        items: {
-          include: {
-            product: true,
+    const order = await dbManager.executeQuery(async () => {
+      return await prisma.order.findUnique({
+        where: { id },
+        include: {
+          items: {
+            include: {
+              product: true,
+            },
           },
         },
-      },
+      });
     });
 
     if (!order) {

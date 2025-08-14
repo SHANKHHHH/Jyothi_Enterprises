@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -12,8 +45,7 @@ const auth_1 = __importDefault(require("./routes/auth"));
 const contact_1 = __importDefault(require("./routes/contact"));
 const booking_1 = __importDefault(require("./routes/booking"));
 const cart_1 = __importDefault(require("./routes/cart"));
-const database_1 = __importDefault(require("./config/database"));
-const dbErrorHandler_1 = require("./middleware/dbErrorHandler");
+const database_1 = __importStar(require("./config/database"));
 const app = (0, express_1.default)();
 const PORT = preload_env_1.env.PORT;
 // Enable CORS for all origins
@@ -34,20 +66,24 @@ app.get('/health/db', async (req, res) => {
         if (!database_1.default) {
             throw new Error('Database client not initialized');
         }
-        // Test database connection
-        await database_1.default.$queryRaw `SELECT 1`;
-        // Test if we can query the database (without assuming specific table names)
-        const tables = await database_1.default.$queryRaw `
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public'
-    `;
+        // Use the executeQuery method that handles prepared statement errors
+        const result = await database_1.dbManager.executeQuery(async () => {
+            // Test database connection
+            await database_1.default.$queryRaw `SELECT 1`;
+            // Test if we can query the database (without assuming specific table names)
+            const tables = await database_1.default.$queryRaw `
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public'
+      `;
+            return tables;
+        });
         res.json({
             status: 'OK',
             message: 'Database connected successfully',
             database: {
                 connected: true,
-                tableCount: Array.isArray(tables) ? tables.length : 'Unknown',
+                tableCount: Array.isArray(result) ? result.length : 'Unknown',
                 timestamp: new Date().toISOString()
             }
         });
@@ -78,8 +114,6 @@ app.use('/api/auth', auth_1.default);
 app.use('/api/contact', contact_1.default);
 app.use('/api', booking_1.default);
 app.use('/api', cart_1.default);
-// Database error handler middleware (should be before 404 handler)
-app.use(dbErrorHandler_1.dbErrorHandler);
 // 404 handler
 app.use('*', (req, res) => {
     res.status(404).json({ error: 'Route not found' });

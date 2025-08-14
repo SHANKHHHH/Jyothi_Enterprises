@@ -62,37 +62,20 @@ const signup = async (req, res) => {
             return res.status(400).json({ errors: errors.array() });
         }
         const { email, password } = req.body;
-        let existingUser;
-        try {
-            existingUser = await database_1.default.user.findUnique({ where: { email } });
-        }
-        catch (dbError) {
-            // Handle prepared statement error specifically
-            if (dbError?.message?.includes('prepared statement') ||
-                dbError?.code === '42P05' ||
-                dbError?.message?.includes('already exists')) {
-                console.log('Prepared statement error detected, resetting connection...');
-                try {
-                    await database_1.dbManager.resetConnection();
-                    // Retry the query after resetting connection
-                    existingUser = await database_1.default.user.findUnique({ where: { email } });
-                }
-                catch (retryError) {
-                    console.error('Retry failed after connection reset:', retryError);
-                    return res.status(500).json({ error: 'Database connection error, please try again' });
-                }
-            }
-            else {
-                throw dbError;
-            }
-        }
+        // Use the executeQuery method that handles prepared statement errors
+        const existingUser = await database_1.dbManager.executeQuery(async () => {
+            return await database_1.default.user.findUnique({ where: { email } });
+        });
         if (existingUser) {
             return res.status(400).json({ error: 'User with this email already exists' });
         }
         const passwordHash = await bcrypt_1.default.hash(password, 10);
-        const user = await database_1.default.user.create({
-            data: { email, passwordHash },
-            select: { id: true, email: true, createdAt: true },
+        // Wrap user creation with executeQuery too
+        const user = await database_1.dbManager.executeQuery(async () => {
+            return await database_1.default.user.create({
+                data: { email, passwordHash },
+                select: { id: true, email: true, createdAt: true },
+            });
         });
         const jwtOptions = {
             expiresIn: (process.env.JWT_EXPIRES_IN || '7d'),
@@ -113,30 +96,10 @@ const login = async (req, res) => {
             return res.status(400).json({ errors: errors.array() });
         }
         const { email, password } = req.body;
-        let user;
-        try {
-            user = await database_1.default.user.findUnique({ where: { email } });
-        }
-        catch (dbError) {
-            // Handle prepared statement error specifically
-            if (dbError?.message?.includes('prepared statement') ||
-                dbError?.code === '42P05' ||
-                dbError?.message?.includes('already exists')) {
-                console.log('Prepared statement error detected, resetting connection...');
-                try {
-                    await database_1.dbManager.resetConnection();
-                    // Retry the query after resetting connection
-                    user = await database_1.default.user.findUnique({ where: { email } });
-                }
-                catch (retryError) {
-                    console.error('Retry failed after connection reset:', retryError);
-                    return res.status(500).json({ error: 'Database connection error, please try again' });
-                }
-            }
-            else {
-                throw dbError;
-            }
-        }
+        // Use the executeQuery method that handles prepared statement errors
+        const user = await database_1.dbManager.executeQuery(async () => {
+            return await database_1.default.user.findUnique({ where: { email } });
+        });
         if (!user) {
             return res.status(401).json({ error: 'Invalid email or password' });
         }
@@ -162,36 +125,13 @@ const login = async (req, res) => {
 exports.login = login;
 const getProfile = async (req, res) => {
     try {
-        let user;
-        try {
-            user = await database_1.default.user.findUnique({
+        // Use the executeQuery method that handles prepared statement errors
+        const user = await database_1.dbManager.executeQuery(async () => {
+            return await database_1.default.user.findUnique({
                 where: { id: req.user?.id },
                 select: { id: true, email: true, createdAt: true, updatedAt: true },
             });
-        }
-        catch (dbError) {
-            // Handle prepared statement error specifically
-            if (dbError?.message?.includes('prepared statement') ||
-                dbError?.code === '42P05' ||
-                dbError?.message?.includes('already exists')) {
-                console.log('Prepared statement error detected, resetting connection...');
-                try {
-                    await database_1.dbManager.resetConnection();
-                    // Retry the query after resetting connection
-                    user = await database_1.default.user.findUnique({
-                        where: { id: req.user?.id },
-                        select: { id: true, email: true, createdAt: true, updatedAt: true },
-                    });
-                }
-                catch (retryError) {
-                    console.error('Retry failed after connection reset:', retryError);
-                    return res.status(500).json({ error: 'Database connection error, please try again' });
-                }
-            }
-            else {
-                throw dbError;
-            }
-        }
+        });
         res.json({ user });
     }
     catch (error) {

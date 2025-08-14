@@ -1,11 +1,44 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getBooking = exports.getAllBookings = exports.createBooking = exports.addEventType = exports.getEventTypes = exports.getServices = exports.bookingValidation = void 0;
+exports.getBooking = exports.getAllBookings = exports.submitBooking = exports.addEventType = exports.getEventTypes = exports.getServices = exports.bookingValidation = void 0;
 const express_validator_1 = require("express-validator");
-const database_1 = __importDefault(require("../config/database"));
+const database_1 = __importStar(require("../config/database"));
 const emailService_1 = __importDefault(require("../services/emailService"));
 // Validation rules for booking submission
 exports.bookingValidation = [
@@ -74,8 +107,10 @@ exports.bookingValidation = [
 // Get all services
 const getServices = async (req, res) => {
     try {
-        const services = await database_1.default.service.findMany({
-            orderBy: { name: 'asc' },
+        const services = await database_1.dbManager.executeQuery(async () => {
+            return await database_1.default.service.findMany({
+                orderBy: { name: 'asc' },
+            });
         });
         return res.status(200).json({
             success: true,
@@ -94,8 +129,10 @@ exports.getServices = getServices;
 // Get all event types
 const getEventTypes = async (req, res) => {
     try {
-        const eventTypes = await database_1.default.eventType.findMany({
-            orderBy: { name: 'asc' },
+        const eventTypes = await database_1.dbManager.executeQuery(async () => {
+            return await database_1.default.eventType.findMany({
+                orderBy: { name: 'asc' },
+            });
         });
         return res.status(200).json({
             success: true,
@@ -111,29 +148,34 @@ const getEventTypes = async (req, res) => {
     }
 };
 exports.getEventTypes = getEventTypes;
-// Add a new event type (open to all users)
+// Add new event type
 const addEventType = async (req, res) => {
     try {
-        const { name } = req.body;
-        if (!name || typeof name !== 'string' || name.trim().length < 2 || name.trim().length > 100) {
+        const errors = (0, express_validator_1.validationResult)(req);
+        if (!errors.isEmpty()) {
             return res.status(400).json({
                 success: false,
-                message: 'Event type name must be between 2 and 100 characters',
+                errors: errors.array(),
             });
         }
+        const { name } = req.body;
         // Check if event type already exists
-        const existing = await database_1.default.eventType.findFirst({ where: { name: name.trim() } });
+        const existing = await database_1.dbManager.executeQuery(async () => {
+            return await database_1.default.eventType.findFirst({ where: { name: name.trim() } });
+        });
         if (existing) {
-            return res.status(409).json({
+            return res.status(400).json({
                 success: false,
-                message: 'Event type already exists',
+                message: 'Event type with this name already exists',
             });
         }
-        const eventType = await database_1.default.eventType.create({ data: { name: name.trim() } });
+        const eventType = await database_1.dbManager.executeQuery(async () => {
+            return await database_1.default.eventType.create({ data: { name: name.trim() } });
+        });
         return res.status(201).json({
             success: true,
-            message: 'Event type added successfully',
             data: eventType,
+            message: 'Event type added successfully',
         });
     }
     catch (error) {
@@ -146,93 +188,112 @@ const addEventType = async (req, res) => {
 };
 exports.addEventType = addEventType;
 // Submit a new booking
-const createBooking = async (req, res) => {
+const submitBooking = async (req, res) => {
     try {
-        // Check for validation errors
         const errors = (0, express_validator_1.validationResult)(req);
         if (!errors.isEmpty()) {
             return res.status(400).json({
                 success: false,
-                message: 'Validation failed',
                 errors: errors.array(),
             });
         }
         const { name, mobile, email, gst, paxCount, attendants, toilets, location, startDate, endDate, startTime, endTime, serviceIds, eventTypeIds, } = req.body;
-        // Create the booking with relations
-        const booking = await database_1.default.booking.create({
-            data: {
-                name,
-                mobile,
-                email,
-                gst,
-                paxCount,
-                attendants,
-                toilets,
-                location,
-                startDate: new Date(startDate),
-                endDate: new Date(endDate),
-                startTime,
-                endTime,
-                services: {
-                    create: serviceIds.map((serviceId) => ({
-                        service: { connect: { id: serviceId } },
-                    })),
+        // Create the main booking
+        const booking = await database_1.dbManager.executeQuery(async () => {
+            return await database_1.default.booking.create({
+                data: {
+                    name,
+                    mobile,
+                    email,
+                    gst,
+                    paxCount,
+                    attendants,
+                    toilets,
+                    location,
+                    startDate: new Date(startDate),
+                    endDate: new Date(endDate),
+                    startTime,
+                    endTime,
                 },
-                events: {
-                    create: eventTypeIds.map((eventTypeId) => ({
-                        eventType: { connect: { id: eventTypeId } },
-                    })),
-                },
-            },
-            include: {
-                services: {
-                    include: {
-                        service: true,
+            });
+        });
+        // Create booking with relations
+        const bookingWithRelations = await database_1.dbManager.executeQuery(async () => {
+            return await database_1.default.booking.create({
+                data: {
+                    name,
+                    mobile,
+                    email,
+                    gst,
+                    paxCount,
+                    attendants,
+                    toilets,
+                    location,
+                    startDate: new Date(startDate),
+                    endDate: new Date(endDate),
+                    startTime,
+                    endTime,
+                    services: {
+                        create: serviceIds.map((serviceId) => ({
+                            service: { connect: { id: serviceId } },
+                        })),
+                    },
+                    events: {
+                        create: eventTypeIds.map((eventTypeId) => ({
+                            eventType: { connect: { id: eventTypeId } },
+                        })),
                     },
                 },
-                events: {
-                    include: {
-                        eventType: true,
+                include: {
+                    services: {
+                        include: {
+                            service: true,
+                        },
+                    },
+                    events: {
+                        include: {
+                            eventType: true,
+                        },
                     },
                 },
-            },
+            });
         });
         // Send email notification to admins
         await emailService_1.default.sendBookingNotificationToAdmins({
-            id: booking.id,
-            name: booking.name,
-            mobile: booking.mobile,
-            email: booking.email,
-            gst: booking.gst || undefined,
-            paxCount: booking.paxCount,
-            attendants: booking.attendants || undefined,
-            toilets: booking.toilets || undefined,
-            location: booking.location || undefined,
-            startDate: booking.startDate,
-            endDate: booking.endDate,
-            startTime: booking.startTime || undefined,
-            endTime: booking.endTime || undefined,
-            createdAt: booking.createdAt,
-            services: booking.services,
-            events: booking.events,
+            id: bookingWithRelations.id,
+            name: bookingWithRelations.name,
+            mobile: bookingWithRelations.mobile,
+            email: bookingWithRelations.email,
+            gst: bookingWithRelations.gst || undefined,
+            paxCount: bookingWithRelations.paxCount,
+            attendants: bookingWithRelations.attendants || undefined,
+            toilets: bookingWithRelations.toilets || undefined,
+            location: bookingWithRelations.location || undefined,
+            startDate: bookingWithRelations.startDate,
+            endDate: bookingWithRelations.endDate,
+            startTime: bookingWithRelations.startTime || undefined,
+            endTime: bookingWithRelations.endTime || undefined,
+            createdAt: bookingWithRelations.createdAt,
+            services: bookingWithRelations.services,
+            events: bookingWithRelations.events,
         });
         // Send confirmation email to user
-        await emailService_1.default.sendBookingConfirmationToUser(booking.email, {
-            ...booking,
-            gst: booking.gst ?? undefined,
-            attendants: booking.attendants ?? undefined,
-            toilets: booking.toilets ?? undefined,
-            location: booking.location ?? undefined,
-            startTime: booking.startTime ?? undefined,
-            endTime: booking.endTime ?? undefined,
+        await emailService_1.default.sendBookingConfirmationToUser(bookingWithRelations.email, {
+            ...bookingWithRelations,
+            gst: bookingWithRelations.gst ?? undefined,
+            attendants: bookingWithRelations.attendants ?? undefined,
+            toilets: bookingWithRelations.toilets ?? undefined,
+            location: bookingWithRelations.location ?? undefined,
+            startTime: bookingWithRelations.startTime ?? undefined,
+            endTime: bookingWithRelations.endTime ?? undefined,
         });
         return res.status(201).json({
             success: true,
             message: 'Booking submitted successfully! We will contact you soon.',
             data: {
-                bookingId: booking.id,
-                submittedAt: booking.createdAt,
-                customerName: booking.name,
+                bookingId: bookingWithRelations.id,
+                submittedAt: bookingWithRelations.createdAt,
+                customerName: bookingWithRelations.name,
             },
         });
     }
@@ -244,24 +305,26 @@ const createBooking = async (req, res) => {
         });
     }
 };
-exports.createBooking = createBooking;
+exports.submitBooking = submitBooking;
 // Get all bookings (admin only)
 const getAllBookings = async (req, res) => {
     try {
-        const bookings = await database_1.default.booking.findMany({
-            include: {
-                services: {
-                    include: {
-                        service: true,
+        const bookings = await database_1.dbManager.executeQuery(async () => {
+            return await database_1.default.booking.findMany({
+                include: {
+                    services: {
+                        include: {
+                            service: true,
+                        },
+                    },
+                    events: {
+                        include: {
+                            eventType: true,
+                        },
                     },
                 },
-                events: {
-                    include: {
-                        eventType: true,
-                    },
-                },
-            },
-            orderBy: { createdAt: 'desc' },
+                orderBy: { createdAt: 'desc' },
+            });
         });
         return res.status(200).json({
             success: true,
@@ -281,20 +344,22 @@ exports.getAllBookings = getAllBookings;
 const getBooking = async (req, res) => {
     try {
         const { id } = req.params;
-        const booking = await database_1.default.booking.findUnique({
-            where: { id },
-            include: {
-                services: {
-                    include: {
-                        service: true,
+        const booking = await database_1.dbManager.executeQuery(async () => {
+            return await database_1.default.booking.findUnique({
+                where: { id },
+                include: {
+                    services: {
+                        include: {
+                            service: true,
+                        },
+                    },
+                    events: {
+                        include: {
+                            eventType: true,
+                        },
                     },
                 },
-                events: {
-                    include: {
-                        eventType: true,
-                    },
-                },
-            },
+            });
         });
         if (!booking) {
             return res.status(404).json({

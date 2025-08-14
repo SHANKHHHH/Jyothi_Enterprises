@@ -30,36 +30,23 @@ export const signup = async (req: Request, res: Response) => {
 
     const { email, password } = req.body;
     
-    let existingUser;
-    try {
-      existingUser = await prisma.user.findUnique({ where: { email } });
-    } catch (dbError: any) {
-      // Handle prepared statement error specifically
-      if (dbError?.message?.includes('prepared statement') || 
-          dbError?.code === '42P05' ||
-          dbError?.message?.includes('already exists')) {
-        console.log('Prepared statement error detected, resetting connection...');
-        try {
-          await dbManager.resetConnection();
-          // Retry the query after resetting connection
-          existingUser = await prisma.user.findUnique({ where: { email } });
-        } catch (retryError) {
-          console.error('Retry failed after connection reset:', retryError);
-          return res.status(500).json({ error: 'Database connection error, please try again' });
-        }
-      } else {
-        throw dbError;
-      }
-    }
+    // Use the executeQuery method that handles prepared statement errors
+    const existingUser = await dbManager.executeQuery(async () => {
+      return await prisma.user.findUnique({ where: { email } });
+    });
     
     if (existingUser) {
       return res.status(400).json({ error: 'User with this email already exists' });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: { email, passwordHash },
-      select: { id: true, email: true, createdAt: true },
+    
+    // Wrap user creation with executeQuery too
+    const user = await dbManager.executeQuery(async () => {
+      return await prisma.user.create({
+        data: { email, passwordHash },
+        select: { id: true, email: true, createdAt: true },
+      });
     });
 
     const jwtOptions: jwt.SignOptions = {
@@ -87,27 +74,10 @@ export const login = async (req: Request, res: Response) => {
 
     const { email, password } = req.body;
     
-    let user;
-    try {
-      user = await prisma.user.findUnique({ where: { email } });
-    } catch (dbError: any) {
-      // Handle prepared statement error specifically
-      if (dbError?.message?.includes('prepared statement') || 
-          dbError?.code === '42P05' ||
-          dbError?.message?.includes('already exists')) {
-        console.log('Prepared statement error detected, resetting connection...');
-        try {
-          await dbManager.resetConnection();
-          // Retry the query after resetting connection
-          user = await prisma.user.findUnique({ where: { email } });
-        } catch (retryError) {
-          console.error('Retry failed after connection reset:', retryError);
-          return res.status(500).json({ error: 'Database connection error, please try again' });
-        }
-      } else {
-        throw dbError;
-      }
-    }
+    // Use the executeQuery method that handles prepared statement errors
+    const user = await dbManager.executeQuery(async () => {
+      return await prisma.user.findUnique({ where: { email } });
+    });
     
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
@@ -140,33 +110,13 @@ export const login = async (req: Request, res: Response) => {
 
 export const getProfile = async (req: AuthRequest, res: Response) => {
   try {
-    let user;
-    try {
-      user = await prisma.user.findUnique({
+    // Use the executeQuery method that handles prepared statement errors
+    const user = await dbManager.executeQuery(async () => {
+      return await prisma.user.findUnique({
         where: { id: req.user?.id },
         select: { id: true, email: true, createdAt: true, updatedAt: true },
       });
-    } catch (dbError: any) {
-      // Handle prepared statement error specifically
-      if (dbError?.message?.includes('prepared statement') || 
-          dbError?.code === '42P05' ||
-          dbError?.message?.includes('already exists')) {
-        console.log('Prepared statement error detected, resetting connection...');
-        try {
-          await dbManager.resetConnection();
-          // Retry the query after resetting connection
-          user = await prisma.user.findUnique({
-            where: { id: req.user?.id },
-            select: { id: true, email: true, createdAt: true, updatedAt: true },
-          });
-        } catch (retryError) {
-          console.error('Retry failed after connection reset:', retryError);
-          return res.status(500).json({ error: 'Database connection error, please try again' });
-        }
-      } else {
-        throw dbError;
-      }
-    }
+    });
     
     res.json({ user });
   } catch (error) {

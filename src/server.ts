@@ -8,8 +8,7 @@ import authRoutes from './routes/auth';
 import contactRoutes from './routes/contact';
 import bookingRoutes from './routes/booking';
 import cartRoutes from './routes/cart';
-import prisma from './config/database';
-import { dbErrorHandler } from './middleware/dbErrorHandler';
+import prisma, { dbManager } from './config/database';
 
 const app: Application = express();
 const PORT = env.PORT;
@@ -35,22 +34,27 @@ app.get('/health/db', async (req: Request, res: Response) => {
       throw new Error('Database client not initialized');
     }
     
-    // Test database connection
-    await prisma.$queryRaw`SELECT 1`;
-    
-    // Test if we can query the database (without assuming specific table names)
-    const tables = await prisma.$queryRaw`
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public'
-    `;
+    // Use the executeQuery method that handles prepared statement errors
+    const result = await dbManager.executeQuery(async () => {
+      // Test database connection
+      await prisma.$queryRaw`SELECT 1`;
+      
+      // Test if we can query the database (without assuming specific table names)
+      const tables = await prisma.$queryRaw`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public'
+      `;
+      
+      return tables;
+    });
     
     res.json({
       status: 'OK',
       message: 'Database connected successfully',
       database: {
         connected: true,
-        tableCount: Array.isArray(tables) ? tables.length : 'Unknown',
+        tableCount: Array.isArray(result) ? result.length : 'Unknown',
         timestamp: new Date().toISOString()
       }
     });
@@ -82,9 +86,6 @@ app.use('/api/auth', authRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api', bookingRoutes);
 app.use('/api', cartRoutes);
-
-// Database error handler middleware (should be before 404 handler)
-app.use(dbErrorHandler);
 
 // 404 handler
 app.use('*', (req: Request, res: Response) => {
