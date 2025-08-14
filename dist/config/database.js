@@ -1,24 +1,89 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const client_1 = require("@prisma/client");
-const prisma = global.prisma || new client_1.PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-    datasources: {
-        db: {
-            url: process.env.DATABASE_URL,
-        },
-    },
-});
-if (process.env.NODE_ENV !== 'production') {
-    global.prisma = prisma;
+class DatabaseManager {
+    constructor() {
+        this.retryCount = 0;
+        this.maxRetries = 3;
+        this.isConnected = false;
+        this.prisma = new client_1.PrismaClient({
+            log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+            datasources: {
+                db: {
+                    url: process.env.DATABASE_URL,
+                },
+            },
+        });
+    }
+    async connect() {
+        try {
+            await this.prisma.$connect();
+            this.isConnected = true;
+            this.retryCount = 0;
+            console.log('✅ Database connected successfully');
+        }
+        catch (error) {
+            console.error('❌ Database connection failed:', error);
+            if (this.retryCount < this.maxRetries) {
+                this.retryCount++;
+                console.log(`Retrying connection... (${this.retryCount}/${this.maxRetries})`);
+                setTimeout(() => this.connect(), 5000);
+            }
+            else {
+                console.error('Max retry attempts reached. Database connection failed.');
+            }
+        }
+    }
+    getClient() {
+        return this.prisma;
+    }
+    async disconnect() {
+        try {
+            if (this.isConnected) {
+                await this.prisma.$disconnect();
+                this.isConnected = false;
+                console.log('Database disconnected gracefully');
+            }
+        }
+        catch (error) {
+            console.error('Error disconnecting database:', error);
+        }
+    }
+    isConnectedToDb() {
+        return this.isConnected;
+    }
 }
+// Initialize database manager
+const dbManager = new DatabaseManager();
+// Set global instance for development hot reload
+if (process.env.NODE_ENV !== 'production') {
+    global.prisma = dbManager.getClient();
+}
+// Connect to database
+dbManager.connect();
 // Handle graceful shutdown
 process.on('beforeExit', async () => {
-    await prisma.$disconnect();
+    await dbManager.disconnect();
 });
-// Handle SIGINT (Ctrl+C)
 process.on('SIGINT', async () => {
-    await prisma.$disconnect();
+    await dbManager.disconnect();
     process.exit(0);
 });
-exports.default = prisma;
+process.on('SIGTERM', async () => {
+    await dbManager.disconnect();
+    process.exit(0);
+});
+// Handle uncaught exceptions
+process.on('uncaughtException', async (error) => {
+    console.error('Uncaught Exception:', error);
+    await dbManager.disconnect();
+    process.exit(1);
+});
+// Handle unhandled promise rejections
+process.on('unhandledRejection', async (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    await dbManager.disconnect();
+    process.exit(1);
+});
+// Export the prisma client - it will always be available
+exports.default = dbManager.getClient();
