@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.executeWithRetry = void 0;
 const client_1 = require("@prisma/client");
 // Simple Prisma client with multiple approaches to disable prepared statements
 const prisma = global.prisma || new client_1.PrismaClient({
@@ -14,4 +15,19 @@ const prisma = global.prisma || new client_1.PrismaClient({
 if (process.env.NODE_ENV !== 'production') {
     global.prisma = prisma;
 }
+// Simple retry function for prepared statement errors
+const executeWithRetry = async (operation) => {
+    try {
+        return await operation();
+    }
+    catch (error) {
+        // If it's a prepared statement error, retry once
+        if (error?.message?.includes('prepared statement') || error?.code === '42P05') {
+            console.log('Prepared statement error detected, retrying once...');
+            return await operation();
+        }
+        throw error;
+    }
+};
+exports.executeWithRetry = executeWithRetry;
 exports.default = prisma;

@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import prisma from '../config/database';
+import prisma, { executeWithRetry } from '../config/database';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -27,9 +27,11 @@ export const authenticateToken = async (
     };
 
     // Get user from database to ensure they still exist
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: { id: true, email: true },
+    const user = await executeWithRetry(async () => {
+      return await prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: { id: true, email: true },
+      });
     });
 
     if (!user) {
