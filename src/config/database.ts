@@ -8,11 +8,59 @@ declare global {
 class DatabaseManager {
   private prisma: PrismaClient;
   private isConnected = false;
+  private connectionPool: PrismaClient[] = [];
+  private maxPoolSize = 3;
+  private currentPoolIndex = 0;
 
   constructor() {
+    // Create initial connection with prepared statements disabled
+    const dbUrl = process.env.DATABASE_URL;
+    if (!dbUrl) {
+      throw new Error('DATABASE_URL environment variable is required');
+    }
+    
+    const dbUrlWithParams = dbUrl + (dbUrl.includes('?') ? '&' : '?') + 'prepared_statements=false';
+    
     this.prisma = new PrismaClient({
       log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+      datasources: {
+        db: {
+          url: dbUrlWithParams,
+        },
+      },
     });
+    
+    // Initialize connection pool
+    this.initializeConnectionPool();
+  }
+
+  private async initializeConnectionPool() {
+    try {
+      const dbUrl = process.env.DATABASE_URL;
+      if (!dbUrl) {
+        throw new Error('DATABASE_URL environment variable is required');
+      }
+      
+      const dbUrlWithParams = dbUrl + (dbUrl.includes('?') ? '&' : '?') + 'prepared_statements=false';
+      
+      // Create additional connections for the pool
+      for (let i = 0; i < this.maxPoolSize - 1; i++) {
+        const client = new PrismaClient({
+          log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+          datasources: {
+            db: {
+              url: dbUrlWithParams,
+            },
+          },
+        });
+        
+        await client.$connect();
+        this.connectionPool.push(client);
+      }
+      console.log(`✅ Connection pool initialized with ${this.connectionPool.length + 1} connections (prepared statements disabled)`);
+    } catch (error) {
+      console.warn('⚠️ Failed to initialize connection pool, using single connection');
+    }
   }
 
   async connect() {
@@ -27,6 +75,15 @@ class DatabaseManager {
   }
 
   getClient(): PrismaClient {
+    // Round-robin connection selection
+    if (this.connectionPool.length > 0) {
+      this.currentPoolIndex = (this.currentPoolIndex + 1) % (this.connectionPool.length + 1);
+      if (this.currentPoolIndex === 0) {
+        return this.prisma;
+      } else {
+        return this.connectionPool[this.currentPoolIndex - 1];
+      }
+    }
     return this.prisma;
   }
 
@@ -35,31 +92,30 @@ class DatabaseManager {
       await this.prisma.$disconnect();
       this.isConnected = false;
       console.log('Database disconnected gracefully');
+      
+      // Disconnect connection pool
+      for (const client of this.connectionPool) {
+        try {
+          await client.$disconnect();
+        } catch (error) {
+          console.warn('Failed to disconnect pool client:', error);
+        }
+      }
+      this.connectionPool = [];
+      this.currentPoolIndex = 0;
     } catch (error) {
       console.error('Error disconnecting database:', error);
     }
   }
 
-  // Method that actually fixes the prepared statement error
+  // Method that executes queries (prepared statements are disabled)
   async executeQuery<T>(operation: () => Promise<T>): Promise<T> {
     try {
       return await operation();
     } catch (error: any) {
-      // Check if this is a prepared statement error
-      if (error?.message?.includes('prepared statement') || 
-          error?.code === '42P05' ||
-          error?.message?.includes('already exists')) {
-        
-        console.log('Prepared statement error detected, resetting connection...');
-        
-        // Reset the connection
-        await this.resetConnection();
-        
-        // Retry the operation
-        return await operation();
-      } else {
-        throw error;
-      }
+      // Log any errors for debugging
+      console.error('Database operation failed:', error);
+      throw error;
     }
   }
 
@@ -67,14 +123,43 @@ class DatabaseManager {
   async resetConnection() {
     try {
       console.log('Resetting database connection...');
+      
+      // Disconnect main connection
       await this.disconnect();
       
+      // Disconnect and clear connection pool
+      for (const client of this.connectionPool) {
+        try {
+          await client.$disconnect();
+        } catch (error) {
+          console.warn('Failed to disconnect pool client:', error);
+        }
+      }
+      this.connectionPool = [];
+      this.currentPoolIndex = 0;
+
       // Create a completely new Prisma client
+      const dbUrl = process.env.DATABASE_URL;
+      if (!dbUrl) {
+        throw new Error('DATABASE_URL environment variable is required');
+      }
+      
+      const dbUrlWithParams = dbUrl + (dbUrl.includes('?') ? '&' : '?') + 'prepared_statements=false';
+      
       this.prisma = new PrismaClient({
         log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+        datasources: {
+          db: {
+            url: dbUrlWithParams,
+          },
+        },
       });
-      
+
       await this.connect();
+      
+      // Reinitialize connection pool
+      await this.initializeConnectionPool();
+      
       console.log('Database connection reset successfully');
     } catch (error) {
       console.error('Failed to reset database connection:', error);
