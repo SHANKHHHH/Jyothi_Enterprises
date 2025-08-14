@@ -39,7 +39,7 @@ class DatabaseManager {
     }
   }
 
-  getClient() {
+  getClient(): PrismaClient {
     return this.prisma;
   }
 
@@ -100,5 +100,12 @@ process.on('unhandledRejection', async (reason, promise) => {
   process.exit(1);
 });
 
-// Export the prisma client - it will always be available
-export default dbManager.getClient();
+// Export the prisma client - guaranteed to be available and properly typed
+const prisma: PrismaClient = dbManager.getClient();
+
+// Ensure prisma is never undefined
+if (!prisma) {
+  throw new Error('Prisma client failed to initialize');
+}
+
+export default prisma;

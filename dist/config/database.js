@@ -85,5 +85,10 @@ process.on('unhandledRejection', async (reason, promise) => {
     await dbManager.disconnect();
     process.exit(1);
 });
-// Export the prisma client - it will always be available
-exports.default = dbManager.getClient();
+// Export the prisma client - guaranteed to be available and properly typed
+const prisma = dbManager.getClient();
+// Ensure prisma is never undefined
+if (!prisma) {
+    throw new Error('Prisma client failed to initialize');
+}
+exports.default = prisma;
