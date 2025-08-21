@@ -3,84 +3,30 @@ import { body, validationResult } from 'express-validator';
 import prisma from '../config/database';
 import emailService from '../services/emailService';
 
-// Validation rules for booking submission
-export const bookingValidation = [
-  body('name')
-    .trim()
-    .isLength({ min: 2, max: 50 })
-    .withMessage('Name must be between 2 and 50 characters'),
-  
-  body('mobile')
-    .trim()
-    .matches(/^(\+91\s?)?[0-9]{10}$/)
-    .withMessage('Please enter a valid Indian mobile number'),
-  
-  body('email')
-    .trim()
-    .isEmail()
-    .withMessage('Please enter a valid email address'),
-  
-  body('gst')
-    .optional()
-    .trim()
-    .isLength({ min: 15, max: 15 })
-    .withMessage('GST number must be 15 characters'),
-  
-  body('paxCount')
-    .isInt({ min: 1 })
-    .withMessage('Pax count must be a positive number'),
-  
-  body('attendants')
-    .optional()
-    .isInt({ min: 0 })
-    .withMessage('Attendants must be a non-negative number'),
-  
-  body('toilets')
-    .optional()
-    .isInt({ min: 0 })
-    .withMessage('Toilets must be a non-negative number'),
-  
-  body('location')
-    .optional()
-    .trim()
-    .isLength({ min: 1, max: 200 })
-    .withMessage('Location must be between 1 and 200 characters'),
-  
-  body('startDate')
-    .isISO8601()
-    .withMessage('Please enter a valid start date'),
-  
-  body('endDate')
-    .isISO8601()
-    .withMessage('Please enter a valid end date'),
-  
-  body('startTime')
-    .optional()
-    .trim()
-    .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
-    .withMessage('Please enter a valid start time (HH:MM format)'),
-  
-  body('endTime')
-    .optional()
-    .trim()
-    .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
-    .withMessage('Please enter a valid end time (HH:MM format)'),
-  
-  body('serviceIds')
-    .isArray({ min: 1 })
-    .withMessage('At least one service must be selected'),
-  
-  body('serviceIds.*')
-    .isUUID()
-    .withMessage('Invalid service ID format'),
-  
-  body('eventTypeIds')
-    .isArray({ min: 1 })
-    .withMessage('At least one event type must be selected'),
-  
-  body('eventTypeIds.*')
-    .isUUID()
-    .withMessage('Invalid event type ID format'),
+// Validation rules
+export const validateBooking = [
+  body('name').trim().isLength({ min: 2 }).withMessage('Name must be at least 2 characters long'),
+  body('mobile').isMobilePhone('any').withMessage('Please provide a valid mobile number'),
+  body('email').isEmail().withMessage('Please provide a valid email address'),
+  body('paxCount').isInt({ min: 1 }).withMessage('Pax count must be at least 1'),
+  body('startDate').isISO8601().withMessage('Please provide a valid start date'),
+  body('endDate').isISO8601().withMessage('Please provide a valid end date'),
+  body('startTime').optional().isString().withMessage('Start time must be a string'),
+  body('endTime').optional().isString().withMessage('End time must be a string'),
+  body('location').optional().isString().withMessage('Location must be a string'),
+  body('gst').optional().isString().withMessage('GST must be a string'),
+  body('attendants').optional().isInt({ min: 0 }).withMessage('Attendants must be a non-negative integer'),
+  body('toilets').optional().isInt({ min: 0 }).withMessage('Toilets must be a non-negative integer'),
+  body('services').optional().isArray().withMessage('Services must be an array'),
+  body('events').optional().isArray().withMessage('Events must be an array'),
+];
+
+export const validateEventType = [
+  body('name').trim().isLength({ min: 2 }).withMessage('Event type name must be at least 2 characters long'),
+];
+
+export const validateService = [
+  body('name').trim().isLength({ min: 2 }).withMessage('Service name must be at least 2 characters long'),
 ];
 
 // Get all services
@@ -186,54 +132,55 @@ export const submitBooking = async (req: Request, res: Response) => {
       endDate,
       startTime,
       endTime,
-      serviceIds,
-      eventTypeIds,
+      services,
+      events,
     } = req.body;
 
-    // Create the main booking
+    // Create the booking
     const booking = await prisma.booking.create({
       data: {
-        name,
-        mobile,
-        email,
-        gst,
-        paxCount,
-        attendants,
-        toilets,
-        location,
+        name: name.trim(),
+        mobile: mobile.trim(),
+        email: email.trim(),
+        gst: gst?.trim(),
+        paxCount: parseInt(paxCount),
+        attendants: attendants ? parseInt(attendants) : null,
+        toilets: toilets ? parseInt(toilets) : null,
+        location: location?.trim(),
         startDate: new Date(startDate),
         endDate: new Date(endDate),
-        startTime,
-        endTime,
+        startTime: startTime?.trim(),
+        endTime: endTime?.trim(),
       },
     });
 
-    // Create booking with relations
-    const bookingWithRelations = await prisma.booking.create({
-      data: {
-        name,
-        mobile,
-        email,
-        gst,
-        paxCount,
-        attendants,
-        toilets,
-        location,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
-        startTime,
-        endTime,
-        services: {
-          create: serviceIds.map((serviceId: string) => ({
-            service: { connect: { id: serviceId } },
-          })),
-        },
-        events: {
-          create: eventTypeIds.map((eventTypeId: string) => ({
-            eventType: { connect: { id: eventTypeId } },
-          })),
-        },
-      },
+    // Add services if provided
+    if (services && Array.isArray(services) && services.length > 0) {
+      const serviceConnections = services.map((serviceId: string) => ({
+        bookingId: booking.id,
+        serviceId: serviceId,
+      }));
+
+      await prisma.bookingService.createMany({
+        data: serviceConnections,
+      });
+    }
+
+    // Add events if provided
+    if (events && Array.isArray(events) && events.length > 0) {
+      const eventConnections = events.map((eventTypeId: string) => ({
+        bookingId: booking.id,
+        eventTypeId: eventTypeId,
+      }));
+
+      await prisma.bookingEvent.createMany({
+        data: eventConnections,
+      });
+    }
+
+    // Fetch the complete booking with relations for email
+    const bookingWithRelations = await prisma.booking.findUnique({
+      where: { id: booking.id },
       include: {
         services: {
           include: {
@@ -248,56 +195,41 @@ export const submitBooking = async (req: Request, res: Response) => {
       },
     });
 
-    // Send email notification to admins
-    await emailService.sendBookingNotificationToAdmins({
-      id: bookingWithRelations.id,
-      name: bookingWithRelations.name,
-      mobile: bookingWithRelations.mobile,
-      email: bookingWithRelations.email,
-      gst: bookingWithRelations.gst || undefined,
-      paxCount: bookingWithRelations.paxCount,
-      attendants: bookingWithRelations.attendants || undefined,
-      toilets: bookingWithRelations.toilets || undefined,
-      location: bookingWithRelations.location || undefined,
-      startDate: bookingWithRelations.startDate,
-      endDate: bookingWithRelations.endDate,
-      startTime: bookingWithRelations.startTime || undefined,
-      endTime: bookingWithRelations.endTime || undefined,
-      createdAt: bookingWithRelations.createdAt,
-      services: bookingWithRelations.services,
-      events: bookingWithRelations.events,
-    });
-    // Send confirmation email to user
-    await emailService.sendBookingConfirmationToUser(bookingWithRelations.email, {
-      ...bookingWithRelations,
-      gst: bookingWithRelations.gst ?? undefined,
-      attendants: bookingWithRelations.attendants ?? undefined,
-      toilets: bookingWithRelations.toilets ?? undefined,
-      location: bookingWithRelations.location ?? undefined,
-      startTime: bookingWithRelations.startTime ?? undefined,
-      endTime: bookingWithRelations.endTime ?? undefined,
-    });
+    // Send email notification
+    let emailSent = false;
+    if (bookingWithRelations) {
+      // Convert null values to undefined to match BookingData interface
+      const bookingForEmail = {
+        ...bookingWithRelations,
+        gst: bookingWithRelations.gst || undefined,
+        attendants: bookingWithRelations.attendants || undefined,
+        toilets: bookingWithRelations.toilets || undefined,
+        location: bookingWithRelations.location || undefined,
+        startTime: bookingWithRelations.startTime || undefined,
+        endTime: bookingWithRelations.endTime || undefined,
+      };
+      emailSent = await emailService.sendBookingNotificationToAdmins(bookingForEmail);
+    }
 
     return res.status(201).json({
       success: true,
-      message: 'Booking submitted successfully! We will contact you soon.',
+      message: 'Booking submitted successfully',
       data: {
-        bookingId: bookingWithRelations.id,
-        submittedAt: bookingWithRelations.createdAt,
-        customerName: bookingWithRelations.name,
+        booking: bookingWithRelations,
+        emailSent,
       },
     });
   } catch (error) {
-    console.error('Booking submission error:', error);
+    console.error('Error submitting booking:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to submit booking. Please try again later.',
+      message: 'Failed to submit booking',
     });
   }
 };
 
-// Get all bookings (admin only)
-export const getAllBookings = async (req: Request, res: Response) => {
+// Get all bookings
+export const getBookings = async (req: Request, res: Response) => {
   try {
     const bookings = await prisma.booking.findMany({
       include: {
@@ -328,8 +260,8 @@ export const getAllBookings = async (req: Request, res: Response) => {
   }
 };
 
-// Get a single booking (admin only)
-export const getBooking = async (req: Request, res: Response) => {
+// Get booking by ID
+export const getBookingById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 

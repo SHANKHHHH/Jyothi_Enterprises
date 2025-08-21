@@ -1,14 +1,11 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider     = "postgresql"
+  url          = env("DATABASE_URL")
+  directUrl    = env("DIRECT_URL")
   relationMode = "prisma"
 }
 
@@ -35,20 +32,18 @@ model EventType {
 }
 
 model Product {
-  id            String   @id @default(uuid())
+  id            String      @id @default(uuid())
   name          String
   description   String?
-  price         Decimal  @db.Decimal(10, 2)
-  originalPrice Decimal? @db.Decimal(10, 2)
+  price         Decimal     @db.Decimal(10, 2)
+  originalPrice Decimal?    @db.Decimal(10, 2)
   imageUrl      String?
-  rating        Decimal? @db.Decimal(3, 2)
-  reviewCount   Int      @default(0)
-  isBestseller  Boolean  @default(false)
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  // Relations
+  rating        Decimal?    @db.Decimal(3, 2)
+  reviewCount   Int         @default(0)
+  isBestseller  Boolean     @default(false)
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
   cartItems     CartItem[]
   orderItems    OrderItem[]
 }
@@ -101,14 +96,13 @@ model Cart {
 }
 
 model CartItem {
-  id          String   @id @default(uuid())
-  cartId      String
-  productId   String
-  quantity    Int
-  createdAt   DateTime @default(now())
-
-  cart        Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
-  product     Product  @relation(fields: [productId], references: [id])
+  id        String   @id @default(uuid())
+  cartId    String
+  productId String
+  quantity  Int
+  createdAt DateTime @default(now())
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id])
 
   @@unique([cartId, productId])
 }
@@ -128,14 +122,13 @@ model Order {
 }
 
 model OrderItem {
-  id            String   @id @default(uuid())
-  orderId       String
-  productId     String
-  quantity      Int
-  createdAt     DateTime @default(now())
-
-  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product       Product  @relation(fields: [productId], references: [id])
+  id        String   @id @default(uuid())
+  orderId   String
+  productId String
+  quantity  Int
+  createdAt DateTime @default(now())
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id])
 }
 
 enum OrderStatus {

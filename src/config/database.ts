@@ -4,33 +4,37 @@ declare global {
   var prisma: PrismaClient | undefined;
 }
 
-// Simple Prisma client with multiple approaches to disable prepared statements
-const prisma = global.prisma || new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+// Create Prisma client optimized for Supabase (with fresh connections)
+const createPrismaClient = () => new PrismaClient({
+  log: process.env.NODE_ENV === 'development' ? ['error'] : ['error'], // Reduced logging
   datasources: {
     db: {
-      url: process.env.DATABASE_URL + '?prepared_statements=false&statement_cache_mode=0&disable_prepared_statements=true&prepared_statement_cache_size=0&binary_parameters=yes',
+      url: process.env.DATABASE_URL,
     },
   },
 });
 
-// For development hot reload
+// Use global instance in development, fresh in production
+const prisma = global.prisma || createPrismaClient();
+
+// For development hot reload only
 if (process.env.NODE_ENV !== 'production') {
   global.prisma = prisma;
 }
 
-// Simple retry function for prepared statement errors
-export const executeWithRetry = async <T>(operation: () => Promise<T>): Promise<T> => {
-  try {
-    return await operation();
-  } catch (error: any) {
-    // If it's a prepared statement error, retry once
-    if (error?.message?.includes('prepared statement') || error?.code === '42P05') {
-      console.log('Prepared statement error detected, retrying once...');
-      return await operation();
-    }
-    throw error;
-  }
-};
+// Handle graceful shutdown
+process.on('beforeExit', async () => {
+  await prisma.$disconnect();
+});
+
+process.on('SIGINT', async () => {
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  await prisma.$disconnect();
+  process.exit(0);
+});
 
 export default prisma;

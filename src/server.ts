@@ -4,10 +4,7 @@ import { env } from './preload-env';
 
 import express from 'express';
 import cors from 'cors';
-import authRoutes from './routes/auth';
-import cartRoutes from './routes/cart';
-import bookingRoutes from './routes/booking';
-import contactRoutes from './routes/contact';
+import apiRoutes from './routes/api';
 import prisma from './config/database';
 
 const app = express();
@@ -18,11 +15,8 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/cart', cartRoutes);
-app.use('/api/booking', bookingRoutes);
-app.use('/api/contact', contactRoutes);
+// Mount unified API routes
+app.use('/api', apiRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -44,7 +38,7 @@ app.get('/health/db', async (req, res) => {
     // Test database connection
     await prisma.$queryRaw`SELECT 1`;
 
-    // Test if we can query the database (without assuming specific table names)
+    // Test if we can query the database
     const tables = await prisma.$queryRaw`
       SELECT table_name
       FROM information_schema.tables
@@ -84,12 +78,12 @@ app.get('/test', (req, res) => {
     resendApiKey: process.env.RESEND_API_KEY ? 'Set' : 'Not set'
   });
 });
-
+  
 // Start server
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔗 Database health: http://localhost:${PORT}/health/db`);
-  console.log(`🔗 Test endpoint: http://localhost:${PORT}/test`);
+  console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🏥 Health check: http://localhost:${PORT}/health`);
+  console.log(`💾 Database health: http://localhost:${PORT}/health/db`);
+  console.log(`🧪 Test endpoint: http://localhost:${PORT}/test`);
 }); 

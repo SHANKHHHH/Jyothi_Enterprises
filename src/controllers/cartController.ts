@@ -1,59 +1,30 @@
 import { Request, Response } from 'express';
-import { body, validationResult } from 'express-validator';
+import { validationResult, body } from 'express-validator';
 import prisma from '../config/database';
 import emailService from '../services/emailService';
 
 // Validation rules for cart operations
 export const cartItemValidation = [
-  body('productId')
-    .isString()
-    .notEmpty()
-    .withMessage('Product ID is required'),
-  
-  body('quantity')
-    .isInt({ min: 1 })
-    .withMessage('Quantity must be at least 1'),
+  body('productId').isString().notEmpty().withMessage('Product ID is required'),
+  body('quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
 ];
 
 export const updateCartItemValidation = [
-  body('quantity')
-    .isInt({ min: 0 })
-    .withMessage('Quantity must be 0 or greater'),
+  body('quantity').isInt({ min: 0 }).withMessage('Quantity must be 0 or greater'),
 ];
 
 export const checkoutValidation = [
-  body('customerName')
-    .trim()
-    .isLength({ min: 2, max: 50 })
-    .withMessage('Customer name must be between 2 and 50 characters'),
-  
-  body('customerEmail')
-    .trim()
-    .isEmail()
-    .withMessage('Please enter a valid email address'),
-  
-  body('customerPhone')
-    .trim()
-    .matches(/^(\+91\s?)?[0-9]{10}$/)
-    .withMessage('Please enter a valid Indian mobile number'),
+  body('customerName').trim().isLength({ min: 2, max: 50 }).withMessage('Customer name must be between 2 and 50 characters'),
+  body('customerEmail').trim().isEmail().withMessage('Please enter a valid email address'),
+  body('customerPhone').trim().matches(/^(\+91\s?)?[0-9]{10}$/).withMessage('Please enter a valid Indian mobile number'),
 ];
 
-// Get or create cart for session
+// Get or create cart for session (SIMPLIFIED VERSION)
 const getOrCreateCart = async (sessionId: string) => {
-  let cart = await prisma.cart.findFirst({
-    where: { sessionId },
-    include: {
-      items: {
-        include: {
-          product: true,
-        },
-      },
-    },
-  });
-
-  if (!cart) {
-    cart = await prisma.cart.create({
-      data: { sessionId },
+  try {
+    // Try to find existing cart
+    let cart = await prisma.cart.findFirst({
+      where: { sessionId },
       include: {
         items: {
           include: {
@@ -62,9 +33,26 @@ const getOrCreateCart = async (sessionId: string) => {
         },
       },
     });
-  }
 
-  return cart;
+    // If no cart exists, create one
+    if (!cart) {
+      cart = await prisma.cart.create({
+        data: { sessionId },
+        include: {
+          items: {
+            include: {
+              product: true,
+            },
+          },
+        },
+      });
+    }
+
+    return cart;
+  } catch (error) {
+    console.error('Error in getOrCreateCart:', error);
+    throw error;
+  }
 };
 
 // Get cart details
@@ -192,8 +180,9 @@ export const updateCartItem = async (req: Request, res: Response) => {
       });
     }
 
+    const { itemId } = req.params;
+    const { quantity } = req.body;
     const sessionId = req.headers['session-id'] as string || req.query.sessionId as string;
-    const { productId, quantity } = req.body;
 
     if (!sessionId) {
       return res.status(400).json({
@@ -202,23 +191,15 @@ export const updateCartItem = async (req: Request, res: Response) => {
       });
     }
 
-    const cart = await getOrCreateCart(sessionId);
-
     if (quantity === 0) {
-      // Remove item from cart
-      await prisma.cartItem.deleteMany({
-        where: {
-          cartId: cart.id,
-          productId,
-        },
+      // Remove item if quantity is 0
+      await prisma.cartItem.delete({
+        where: { id: itemId },
       });
     } else {
       // Update quantity
-      await prisma.cartItem.updateMany({
-        where: {
-          cartId: cart.id,
-          productId,
-        },
+      await prisma.cartItem.update({
+        where: { id: itemId },
         data: { quantity },
       });
     }
@@ -228,7 +209,7 @@ export const updateCartItem = async (req: Request, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      message: 'Cart updated successfully',
+      message: 'Cart item updated successfully',
       data: {
         cartId: updatedCart.id,
         items: updatedCart.items,
@@ -246,8 +227,8 @@ export const updateCartItem = async (req: Request, res: Response) => {
 // Remove item from cart
 export const removeFromCart = async (req: Request, res: Response) => {
   try {
+    const { itemId } = req.params;
     const sessionId = req.headers['session-id'] as string || req.query.sessionId as string;
-    const { productId } = req.params;
 
     if (!sessionId) {
       return res.status(400).json({
@@ -256,13 +237,8 @@ export const removeFromCart = async (req: Request, res: Response) => {
       });
     }
 
-    const cart = await getOrCreateCart(sessionId);
-
-    await prisma.cartItem.deleteMany({
-      where: {
-        cartId: cart.id,
-        productId,
-      },
+    await prisma.cartItem.delete({
+      where: { id: itemId },
     });
 
     // Get updated cart
@@ -297,11 +273,15 @@ export const clearCart = async (req: Request, res: Response) => {
       });
     }
 
-    const cart = await getOrCreateCart(sessionId);
-
-    await prisma.cartItem.deleteMany({
-      where: { cartId: cart.id },
+    const cart = await prisma.cart.findFirst({
+      where: { sessionId },
     });
+
+    if (cart) {
+      await prisma.cartItem.deleteMany({
+        where: { cartId: cart.id },
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -383,60 +363,56 @@ export const checkout = async (req: Request, res: Response) => {
     });
 
     // Send order notification email to admins
-    await emailService.sendOrderNotificationToAdmins({
-      id: orderWithProducts!.id,
-      customerName: orderWithProducts!.customerName,
-      customerEmail: orderWithProducts!.customerEmail,
-      customerPhone: orderWithProducts!.customerPhone,
-      totalAmount: Number(orderWithProducts!.totalAmount),
-      status: orderWithProducts!.status,
-      createdAt: orderWithProducts!.createdAt,
-      items: orderWithProducts!.items.map(item => ({
-        quantity: item.quantity,
-        price: Number(item.product.price),
-        product: {
-          id: item.product.id,
-          name: item.product.name,
-          description: item.product.description || undefined,
-        },
-      })),
-    });
+    let emailSent = false;
+    if (orderWithProducts) {
+      // Convert Prisma data to match OrderData interface
+      const orderForEmail = {
+        id: orderWithProducts.id,
+        customerName: orderWithProducts.customerName,
+        customerEmail: orderWithProducts.customerEmail,
+        customerPhone: orderWithProducts.customerPhone,
+        totalAmount: Number(orderWithProducts.totalAmount),
+        status: orderWithProducts.status,
+        createdAt: orderWithProducts.createdAt,
+        items: orderWithProducts.items.map(item => ({
+          quantity: item.quantity,
+          price: Number(item.product.price),
+          product: {
+            id: item.product.id,
+            name: item.product.name,
+            description: item.product.description || undefined
+          }
+        }))
+      };
+      emailSent = await emailService.sendOrderNotificationToAdmins(orderForEmail);
+    }
 
-    // Send confirmation email to user
-    await emailService.sendOrderConfirmationToUser(orderWithProducts!.customerEmail, {
-      id: orderWithProducts!.id,
-      customerName: orderWithProducts!.customerName,
-      customerEmail: orderWithProducts!.customerEmail,
-      customerPhone: orderWithProducts!.customerPhone,
-      totalAmount: Number(orderWithProducts!.totalAmount),
-      status: orderWithProducts!.status,
-      createdAt: orderWithProducts!.createdAt,
-      items: orderWithProducts!.items.map(item => ({
-        quantity: item.quantity,
-        price: Number(item.product.price),
-        product: {
-          id: item.product.id,
-          name: item.product.name,
-          description: item.product.description || undefined,
+    if (emailSent) {
+      return res.status(200).json({
+        success: true,
+        message: 'Order placed successfully! Check your email for confirmation.',
+        data: {
+          orderId: order.id,
+          totalAmount: Number(totalAmount),
+          items: orderWithProducts?.items || [],
         },
-      })),
-    });
-
-    return res.status(201).json({
-      success: true,
-      message: 'Order placed successfully! We will contact you soon.',
-      data: {
-        orderId: order.id,
-        totalAmount: Number(order.totalAmount),
-        customerName: order.customerName,
-        submittedAt: order.createdAt,
-      },
-    });
+      });
+    } else {
+      return res.status(200).json({
+        success: true,
+        message: 'Order placed successfully! Email notification failed.',
+        data: {
+          orderId: order.id,
+          totalAmount: Number(totalAmount),
+          items: orderWithProducts?.items || [],
+        },
+      });
+    }
   } catch (error) {
     console.error('Error during checkout:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to process checkout. Please try again later.',
+      message: 'Failed to process checkout',
     });
   }
 };

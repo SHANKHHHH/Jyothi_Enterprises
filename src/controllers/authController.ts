@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
-import prisma, { executeWithRetry } from '../config/database';
+import prisma from '../config/database';
 import { AuthRequest } from '../middleware/auth';
 
 export const signupValidation = [
@@ -30,9 +30,7 @@ export const signup = async (req: Request, res: Response) => {
 
     const { email, password } = req.body;
     
-    const existingUser = await executeWithRetry(async () => {
-      return await prisma.user.findUnique({ where: { email } });
-    });
+    const existingUser = await prisma.user.findUnique({ where: { email } });
     
     if (existingUser) {
       return res.status(400).json({ error: 'User with this email already exists' });
@@ -40,11 +38,9 @@ export const signup = async (req: Request, res: Response) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
     
-    const user = await executeWithRetry(async () => {
-      return await prisma.user.create({
-        data: { email, passwordHash },
-        select: { id: true, email: true, createdAt: true },
-      });
+    const user = await prisma.user.create({
+      data: { email, passwordHash },
+      select: { id: true, email: true, createdAt: true },
     });
 
     const jwtOptions: jwt.SignOptions = {
@@ -72,9 +68,7 @@ export const login = async (req: Request, res: Response) => {
 
     const { email, password } = req.body;
     
-    const user = await executeWithRetry(async () => {
-      return await prisma.user.findUnique({ where: { email } });
-    });
+    const user = await prisma.user.findUnique({ where: { email } });
     
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
@@ -107,11 +101,9 @@ export const login = async (req: Request, res: Response) => {
 
 export const getProfile = async (req: AuthRequest, res: Response) => {
   try {
-    const user = await executeWithRetry(async () => {
-      return await prisma.user.findUnique({
-        where: { id: req.user?.id },
-        select: { id: true, email: true, createdAt: true, updatedAt: true },
-      });
+    const user = await prisma.user.findUnique({
+      where: { id: req.user?.id },
+      select: { id: true, email: true, createdAt: true, updatedAt: true },
     });
     
     res.json({ user });

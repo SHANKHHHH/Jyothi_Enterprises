@@ -17,6 +17,21 @@ const requiredEnvVars = [
     'PORT',
     'NODE_ENV'
 ];
+// Additional validation for production
+if (process.env.NODE_ENV === 'production') {
+    const productionEnvVars = [
+        'RESEND_API_KEY'
+    ];
+    const missingProductionVars = productionEnvVars.filter(envVar => !process.env[envVar]);
+    if (missingProductionVars.length > 0) {
+        console.error('❌ Missing required production environment variables:');
+        missingProductionVars.forEach(envVar => {
+            console.error(`   - ${envVar}`);
+        });
+        console.error('\n⚠️  Production deployment requires all variables to be set.');
+        process.exit(1);
+    }
+}
 // Check for missing required environment variables
 const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar]);
 if (missingEnvVars.length > 0) {

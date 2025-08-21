@@ -15,19 +15,19 @@ import {
 const router = express.Router();
 
 // Get cart details
-router.get('/cart', getCart);
+router.get('/', getCart);
 
 // Add item to cart
-router.post('/cart/items', cartItemValidation, addToCart);
+router.post('/items', cartItemValidation, addToCart);
 
 // Update cart item quantity
-router.put('/cart/items/:itemId', updateCartItemValidation, updateCartItem);
+router.put('/items/:itemId', updateCartItemValidation, updateCartItem);
 
 // Remove item from cart
-router.delete('/cart/items/:itemId', removeFromCart);
+router.delete('/items/:itemId', removeFromCart);
 
 // Checkout
-router.post('/cart/checkout', checkoutValidation, checkout);
+router.post('/checkout', checkoutValidation, checkout);
 
 // Get all orders (admin only)
 router.get('/orders', getAllOrders);

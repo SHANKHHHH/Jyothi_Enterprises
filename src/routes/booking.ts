@@ -3,9 +3,9 @@ import {
   getServices,
   getEventTypes,
   submitBooking,
-  getAllBookings,
-  getBooking,
-  bookingValidation,
+  getBookings,
+  getBookingById,
+  validateBooking,
   addEventType,
 } from '../controllers/bookingController';
 
@@ -20,12 +20,12 @@ router.get('/events', getEventTypes);
 router.post('/events', addEventType);
 
 // Submit a new booking
-router.post('/bookings', bookingValidation, submitBooking);
+router.post('/bookings', validateBooking, submitBooking);
 
 // Get all bookings (admin only)
-router.get('/bookings', getAllBookings);
+router.get('/bookings', getBookings);
 
 // Get a single booking (admin only)
-router.get('/bookings/:id', getBooking);
+router.get('/bookings/:id', getBookingById);
 
 export default router; 
