@@ -52,16 +52,37 @@ async function seedAll() {
 
     // Seed Products (minimal - just names and basic info for cart)
     const products = [
+      { name: 'Bio Loo Portable Chemical toilet wc Lexus' },
+      { name: 'Bio Loo Hi-Tech WC with health faucet' },
+      { name: 'Bio Loo Portable Chemical Toilet ECO' },
+      { name: 'Bio Loo Handicap Toilet' },
+      { name: 'Bio Handwash 2-Tap' },
+      { name: 'Bio Mens Urinals Cross 4x1' },
+
       { name: 'PM Container' },
-      { name: 'Luxury Toilet Unit' },
-      { name: 'Bio Loo Unit' },
-      { name: 'Handwash Station' },
-      { name: 'Cooling System Unit' },
+      { name: 'Bio Loo Prime Luxury Female Container' },
+      { name: 'Bio Loo Prime Luxury Male Container' },
+      { name: 'Bio Loo Prime Luxury 2-in-1 Container' },
+
+      { name: 'Bio Loo Portable Toilet Mains Connection WC' },
+      { name: 'Bio Loo Portable Toilet Mains Connection IWC' },
+      { name: 'Bio Mens Urinals 3-in-1' },
+      { name: 'Bio Handwash Sink (Per Tap)' },
+      { name: 'Bio Loo Shower Cabin' },
+
+      { name: 'Ductable AC – 11 Ton' },
+      { name: 'Tower AC (5 Ton)' },
+      { name: 'Portable AC (1.5 Ton)' },
+
+      { name: 'Airon Water-Air Cooler 110 Ltr' },
+      { name: 'Airon Water-Air Cooler 60 Ltr' },
+      { name: 'Airon Tower Cooler' },
+      { name: 'Airon Mist Fan' },
+      { name: 'Pedestal Fan' },
+
       { name: 'Patio Heater' },
-      { name: 'Portable Urinal Unit' },
-      { name: 'VIP Restroom Trailer' },
-      { name: 'Event Tent Package' },
-      { name: 'Mobile Kitchen Unit' }
+      { name: 'Fire Extinguisher CO2 GAS' },
+      { name: 'Fire Extinguisher NITROGEN GAS' } 
     ];
 
     for (const product of products) {

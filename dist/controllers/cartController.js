@@ -1,78 +1,30 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getOrder = exports.getAllOrders = exports.checkout = exports.clearCart = exports.removeFromCart = exports.updateCartItem = exports.addToCart = exports.getCart = exports.checkoutValidation = exports.updateCartItemValidation = exports.cartItemValidation = void 0;
 const express_validator_1 = require("express-validator");
-const database_1 = __importStar(require("../config/database"));
+const database_1 = __importDefault(require("../config/database"));
 const emailService_1 = __importDefault(require("../services/emailService"));
 // Validation rules for cart operations
 exports.cartItemValidation = [
-    (0, express_validator_1.body)('productId')
-        .isString()
-        .notEmpty()
-        .withMessage('Product ID is required'),
-    (0, express_validator_1.body)('quantity')
-        .isInt({ min: 1 })
-        .withMessage('Quantity must be at least 1'),
+    (0, express_validator_1.body)('productId').isString().notEmpty().withMessage('Product ID is required'),
+    (0, express_validator_1.body)('quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
 ];
 exports.updateCartItemValidation = [
-    (0, express_validator_1.body)('quantity')
-        .isInt({ min: 0 })
-        .withMessage('Quantity must be 0 or greater'),
+    (0, express_validator_1.body)('quantity').isInt({ min: 0 }).withMessage('Quantity must be 0 or greater'),
 ];
 exports.checkoutValidation = [
-    (0, express_validator_1.body)('customerName')
-        .trim()
-        .isLength({ min: 2, max: 50 })
-        .withMessage('Customer name must be between 2 and 50 characters'),
-    (0, express_validator_1.body)('customerEmail')
-        .trim()
-        .isEmail()
-        .withMessage('Please enter a valid email address'),
-    (0, express_validator_1.body)('customerPhone')
-        .trim()
-        .matches(/^(\+91\s?)?[0-9]{10}$/)
-        .withMessage('Please enter a valid Indian mobile number'),
+    (0, express_validator_1.body)('customerName').trim().isLength({ min: 2, max: 50 }).withMessage('Customer name must be between 2 and 50 characters'),
+    (0, express_validator_1.body)('customerEmail').trim().isEmail().withMessage('Please enter a valid email address'),
+    (0, express_validator_1.body)('customerPhone').trim().matches(/^(\+91\s?)?[0-9]{10}$/).withMessage('Please enter a valid Indian mobile number'),
 ];
-// Get or create cart for session
+// Get or create cart for session (SIMPLIFIED VERSION)
 const getOrCreateCart = async (sessionId) => {
-    let cart = await (0, database_1.executeWithRetry)(async () => {
-        return await database_1.default.cart.findFirst({
+    try {
+        // Try to find existing cart
+        let cart = await database_1.default.cart.findFirst({
             where: { sessionId },
             include: {
                 items: {
@@ -82,10 +34,9 @@ const getOrCreateCart = async (sessionId) => {
                 },
             },
         });
-    });
-    if (!cart) {
-        cart = await (0, database_1.executeWithRetry)(async () => {
-            return await database_1.default.cart.create({
+        // If no cart exists, create one
+        if (!cart) {
+            cart = await database_1.default.cart.create({
                 data: { sessionId },
                 include: {
                     items: {
@@ -95,9 +46,13 @@ const getOrCreateCart = async (sessionId) => {
                     },
                 },
             });
-        });
+        }
+        return cart;
     }
-    return cart;
+    catch (error) {
+        console.error('Error in getOrCreateCart:', error);
+        throw error;
+    }
 };
 // Get cart details
 const getCart = async (req, res) => {
@@ -156,35 +111,29 @@ const addToCart = async (req, res) => {
         }
         const cart = await getOrCreateCart(sessionId);
         // Check if item already exists in cart
-        const existingItem = await (0, database_1.executeWithRetry)(async () => {
-            return await database_1.default.cartItem.findUnique({
-                where: {
-                    cartId_productId: {
-                        cartId: cart.id,
-                        productId,
-                    },
+        const existingItem = await database_1.default.cartItem.findUnique({
+            where: {
+                cartId_productId: {
+                    cartId: cart.id,
+                    productId,
                 },
-            });
+            },
         });
         if (existingItem) {
             // Update quantity
-            await (0, database_1.executeWithRetry)(async () => {
-                await database_1.default.cartItem.update({
-                    where: { id: existingItem.id },
-                    data: { quantity: existingItem.quantity + quantity },
-                });
+            await database_1.default.cartItem.update({
+                where: { id: existingItem.id },
+                data: { quantity: existingItem.quantity + quantity },
             });
         }
         else {
             // Add new item
-            await (0, database_1.executeWithRetry)(async () => {
-                await database_1.default.cartItem.create({
-                    data: {
-                        cartId: cart.id,
-                        productId,
-                        quantity,
-                    },
-                });
+            await database_1.default.cartItem.create({
+                data: {
+                    cartId: cart.id,
+                    productId,
+                    quantity,
+                },
             });
         }
         // Get updated cart
@@ -218,43 +167,33 @@ const updateCartItem = async (req, res) => {
                 errors: errors.array(),
             });
         }
+        const { itemId } = req.params;
+        const { quantity } = req.body;
         const sessionId = req.headers['session-id'] || req.query.sessionId;
-        const { productId, quantity } = req.body;
         if (!sessionId) {
             return res.status(400).json({
                 success: false,
                 message: 'Session ID is required',
             });
         }
-        const cart = await getOrCreateCart(sessionId);
         if (quantity === 0) {
-            // Remove item from cart
-            await (0, database_1.executeWithRetry)(async () => {
-                await database_1.default.cartItem.deleteMany({
-                    where: {
-                        cartId: cart.id,
-                        productId,
-                    },
-                });
+            // Remove item if quantity is 0
+            await database_1.default.cartItem.delete({
+                where: { id: itemId },
             });
         }
         else {
             // Update quantity
-            await (0, database_1.executeWithRetry)(async () => {
-                await database_1.default.cartItem.updateMany({
-                    where: {
-                        cartId: cart.id,
-                        productId,
-                    },
-                    data: { quantity },
-                });
+            await database_1.default.cartItem.update({
+                where: { id: itemId },
+                data: { quantity },
             });
         }
         // Get updated cart
         const updatedCart = await getOrCreateCart(sessionId);
         return res.status(200).json({
             success: true,
-            message: 'Cart updated successfully',
+            message: 'Cart item updated successfully',
             data: {
                 cartId: updatedCart.id,
                 items: updatedCart.items,
@@ -273,22 +212,16 @@ exports.updateCartItem = updateCartItem;
 // Remove item from cart
 const removeFromCart = async (req, res) => {
     try {
+        const { itemId } = req.params;
         const sessionId = req.headers['session-id'] || req.query.sessionId;
-        const { productId } = req.params;
         if (!sessionId) {
             return res.status(400).json({
                 success: false,
                 message: 'Session ID is required',
             });
         }
-        const cart = await getOrCreateCart(sessionId);
-        await (0, database_1.executeWithRetry)(async () => {
-            await database_1.default.cartItem.deleteMany({
-                where: {
-                    cartId: cart.id,
-                    productId,
-                },
-            });
+        await database_1.default.cartItem.delete({
+            where: { id: itemId },
         });
         // Get updated cart
         const updatedCart = await getOrCreateCart(sessionId);
@@ -320,12 +253,14 @@ const clearCart = async (req, res) => {
                 message: 'Session ID is required',
             });
         }
-        const cart = await getOrCreateCart(sessionId);
-        await (0, database_1.executeWithRetry)(async () => {
+        const cart = await database_1.default.cart.findFirst({
+            where: { sessionId },
+        });
+        if (cart) {
             await database_1.default.cartItem.deleteMany({
                 where: { cartId: cart.id },
             });
-        });
+        }
         return res.status(200).json({
             success: true,
             message: 'Cart cleared successfully',
@@ -372,90 +307,84 @@ const checkout = async (req, res) => {
             return sum + (Number(price) * item.quantity);
         }, 0);
         // Create order
-        const order = await (0, database_1.executeWithRetry)(async () => {
-            return await database_1.default.order.create({
-                data: {
-                    cartId: cart.id,
-                    customerName,
-                    customerEmail,
-                    customerPhone,
-                    totalAmount,
-                    items: {
-                        create: cart.items.map(item => ({
-                            productId: item.productId,
-                            quantity: item.quantity,
-                        })),
-                    },
-                },
-            });
-        });
-        // Fetch the order with product data for email sending
-        const orderWithProducts = await (0, database_1.executeWithRetry)(async () => {
-            return await database_1.default.order.findUnique({
-                where: { id: order.id },
-                include: {
-                    items: {
-                        include: {
-                            product: true,
-                        },
-                    },
-                },
-            });
-        });
-        // Send order notification email to admins
-        await emailService_1.default.sendOrderNotificationToAdmins({
-            id: orderWithProducts.id,
-            customerName: orderWithProducts.customerName,
-            customerEmail: orderWithProducts.customerEmail,
-            customerPhone: orderWithProducts.customerPhone,
-            totalAmount: Number(orderWithProducts.totalAmount),
-            status: orderWithProducts.status,
-            createdAt: orderWithProducts.createdAt,
-            items: orderWithProducts.items.map(item => ({
-                quantity: item.quantity,
-                price: Number(item.product.price),
-                product: {
-                    id: item.product.id,
-                    name: item.product.name,
-                    description: item.product.description || undefined,
-                },
-            })),
-        });
-        // Send confirmation email to user
-        await emailService_1.default.sendOrderConfirmationToUser(orderWithProducts.customerEmail, {
-            id: orderWithProducts.id,
-            customerName: orderWithProducts.customerName,
-            customerEmail: orderWithProducts.customerEmail,
-            customerPhone: orderWithProducts.customerPhone,
-            totalAmount: Number(orderWithProducts.totalAmount),
-            status: orderWithProducts.status,
-            createdAt: orderWithProducts.createdAt,
-            items: orderWithProducts.items.map(item => ({
-                quantity: item.quantity,
-                price: Number(item.product.price),
-                product: {
-                    id: item.product.id,
-                    name: item.product.name,
-                    description: item.product.description || undefined,
-                },
-            })),
-        });
-        return res.status(201).json({
-            success: true,
-            message: 'Order placed successfully! We will contact you soon.',
+        const order = await database_1.default.order.create({
             data: {
-                orderId: order.id,
-                totalAmount: Number(order.totalAmount),
-                customerName: order.customerName,
-                submittedAt: order.createdAt,
+                cartId: cart.id,
+                customerName,
+                customerEmail,
+                customerPhone,
+                totalAmount,
+                items: {
+                    create: cart.items.map(item => ({
+                        productId: item.productId,
+                        quantity: item.quantity,
+                    })),
+                },
             },
         });
+        // Fetch the order with product data for email sending
+        const orderWithProducts = await database_1.default.order.findUnique({
+            where: { id: order.id },
+            include: {
+                items: {
+                    include: {
+                        product: true,
+                    },
+                },
+            },
+        });
+        // Send order notification email to admins
+        let emailSent = false;
+        if (orderWithProducts) {
+            // Convert Prisma data to match OrderData interface
+            const orderForEmail = {
+                id: orderWithProducts.id,
+                customerName: orderWithProducts.customerName,
+                customerEmail: orderWithProducts.customerEmail,
+                customerPhone: orderWithProducts.customerPhone,
+                totalAmount: Number(orderWithProducts.totalAmount),
+                status: orderWithProducts.status,
+                createdAt: orderWithProducts.createdAt,
+                items: orderWithProducts.items.map(item => ({
+                    quantity: item.quantity,
+                    price: Number(item.product.price),
+                    product: {
+                        id: item.product.id,
+                        name: item.product.name,
+                        description: item.product.description || undefined
+                    }
+                }))
+            };
+            emailSent = await emailService_1.default.sendOrderNotificationToAdmins(orderForEmail);
+        }
+        if (emailSent) {
+            return res.status(200).json({
+                success: true,
+                message: 'Order placed successfully! Check your email for confirmation.',
+                data: {
+                    orderId: order.id,
+                    totalAmount: Number(totalAmount),
+                    items: orderWithProducts?.items || [],
+                },
+            });
+        }
+        else {
+            return res.status(200).json({
+                success: true,
+                message: 'Order placed successfully! Email notification failed.',
+                data: {
+                    orderId: order.id,
+                    totalAmount: Number(totalAmount),
+                    items: orderWithProducts?.items || [],
+                },
+            });
+        }
     }
     catch (error) {
         console.error('Error during checkout:', error);
         return res.status(500).json({
             success: false,
-            message: 'Failed to process checkout. Please try again later.',
+            message: 'Failed to process checkout',
         });
     }
 };
@@ -463,17 +392,15 @@ exports.checkout = checkout;
 // Get all orders (admin only)
 const getAllOrders = async (req, res) => {
     try {
-        const orders = await (0, database_1.executeWithRetry)(async () => {
-            return await database_1.default.order.findMany({
-                include: {
-                    items: {
-                        include: {
-                            product: true,
-                        },
+        const orders = await database_1.default.order.findMany({
+            include: {
+                items: {
+                    include: {
+                        product: true,
                     },
                 },
-                orderBy: { createdAt: 'desc' },
-            });
+            },
+            orderBy: { createdAt: 'desc' },
         });
         return res.status(200).json({
             success: true,
@@ -493,17 +420,15 @@ exports.getAllOrders = getAllOrders;
 const getOrder = async (req, res) => {
     try {
         const { id } = req.params;
-        const order = await (0, database_1.executeWithRetry)(async () => {
-            return await database_1.default.order.findUnique({
-                where: { id },
-                include: {
-                    items: {
-                        include: {
-                            product: true,
-                        },
+        const order = await database_1.default.order.findUnique({
+            where: { id },
+            include: {
+                items: {
+                    include: {
+                        product: true,
                     },
                 },
-            });
+            },
         });
         if (!order) {
             return res.status(404).json({

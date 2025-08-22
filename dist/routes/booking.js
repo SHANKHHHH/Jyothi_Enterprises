@@ -13,9 +13,9 @@ router.get('/events', bookingController_1.getEventTypes);
 // Add a new event type (open to all users)
 router.post('/events', bookingController_1.addEventType);
 // Submit a new booking
-router.post('/bookings', bookingController_1.bookingValidation, bookingController_1.submitBooking);
+router.post('/bookings', bookingController_1.validateBooking, bookingController_1.submitBooking);
 // Get all bookings (admin only)
-router.get('/bookings', bookingController_1.getAllBookings);
+router.get('/bookings', bookingController_1.getBookings);
 // Get a single booking (admin only)
-router.get('/bookings/:id', bookingController_1.getBooking);
+router.get('/bookings/:id', bookingController_1.getBookingById);
 exports.default = router;
