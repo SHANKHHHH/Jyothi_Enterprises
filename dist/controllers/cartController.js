@@ -19,6 +19,11 @@ exports.checkoutValidation = [
     (0, express_validator_1.body)('customerName').trim().isLength({ min: 2, max: 50 }).withMessage('Customer name must be between 2 and 50 characters'),
     (0, express_validator_1.body)('customerEmail').trim().isEmail().withMessage('Please enter a valid email address'),
     (0, express_validator_1.body)('customerPhone').trim().matches(/^(\+91\s?)?[0-9]{10}$/).withMessage('Please enter a valid Indian mobile number'),
+    (0, express_validator_1.body)('items').isArray().withMessage('Items must be an array'),
+    (0, express_validator_1.body)('items.*.id').notEmpty().withMessage('Item ID is required'),
+    (0, express_validator_1.body)('items.*.name').notEmpty().withMessage('Item name is required'),
+    (0, express_validator_1.body)('items.*.price').isNumeric().withMessage('Item price must be a number'),
+    (0, express_validator_1.body)('items.*.quantity').isInt({ min: 1 }).withMessage('Item quantity must be a positive integer'),
 ];
 // Get or create cart for session (SIMPLIFIED VERSION)
 const getOrCreateCart = async (sessionId) => {
@@ -287,25 +292,81 @@ const checkout = async (req, res) => {
             });
         }
         const sessionId = req.headers['session-id'] || req.query.sessionId;
-        const { customerName, customerEmail, customerPhone } = req.body;
-        if (!sessionId) {
+        const { customerName, customerEmail, customerPhone, items } = req.body;
+        // Check if we have items directly from frontend or need to get from cart
+        let cartItems = [];
+        let totalAmount = 0;
+        if (items && Array.isArray(items) && items.length > 0) {
+            // Direct items from frontend
+            cartItems = items;
+            totalAmount = items.reduce((sum, item) => {
+                return sum + (Number(item.price) * item.quantity);
+            }, 0);
+        }
+        else {
+            // Use existing cart system
+            if (!sessionId) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Session ID is required when no items provided',
+                });
+            }
+            const cart = await getOrCreateCart(sessionId);
+            if (cart.items.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Cart is empty',
+                });
+            }
+            cartItems = cart.items;
+            totalAmount = cart.items.reduce((sum, item) => {
+                const price = item.product.originalPrice || item.product.price;
+                return sum + (Number(price) * item.quantity);
+            }, 0);
+        }
+        if (cartItems.length === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Session ID is required',
+                message: 'No items to checkout',
             });
         }
-        const cart = await getOrCreateCart(sessionId);
-        if (cart.items.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'Cart is empty',
+        // Create a cart for this order
+        const cart = await database_1.default.cart.create({
+            data: { sessionId: sessionId || `checkout_${Date.now()}` },
+        });
+        // Add items to the cart
+        for (const item of cartItems) {
+            // Find or create product
+            let product = await database_1.default.product.findFirst({
+                where: { name: item.name }
+            });
+            if (!product) {
+                // Create product if it doesn't exist
+                product = await database_1.default.product.create({
+                    data: {
+                        name: item.name,
+                        description: item.description || '',
+                        price: Number(item.price),
+                        originalPrice: Number(item.price),
+                        imageUrl: item.image || null,
+                        isActive: true,
+                    },
+                });
+            }
+            // Add item to cart
+            await database_1.default.cartItem.create({
+                data: {
+                    cartId: cart.id,
+                    productId: product.id,
+                    quantity: item.quantity,
+                },
             });
         }
-        // Calculate total amount
-        const totalAmount = cart.items.reduce((sum, item) => {
-            const price = item.product.originalPrice || item.product.price;
-            return sum + (Number(price) * item.quantity);
-        }, 0);
+        // Get the cart items with their product IDs
+        const cartItemsWithProducts = await database_1.default.cartItem.findMany({
+            where: { cartId: cart.id },
+            include: { product: true }
+        });
         // Create order
         const order = await database_1.default.order.create({
             data: {
@@ -314,13 +375,15 @@ const checkout = async (req, res) => {
                 customerEmail,
                 customerPhone,
                 totalAmount,
-                items: {
-                    create: cart.items.map(item => ({
-                        productId: item.productId,
-                        quantity: item.quantity,
-                    })),
-                },
             },
+        });
+        // Create order items
+        await database_1.default.orderItem.createMany({
+            data: cartItemsWithProducts.map(item => ({
+                orderId: order.id,
+                productId: item.productId,
+                quantity: item.quantity,
+            })),
         });
         // Fetch the order with product data for email sending
         const orderWithProducts = await database_1.default.order.findUnique({
@@ -382,9 +445,19 @@ const checkout = async (req, res) => {
     }
     catch (error) {
         console.error('Error during checkout:', error);
+        // Provide more detailed error information for debugging
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        console.error('Checkout error details:', {
+            message: errorMessage,
+            stack: errorStack,
+            timestamp: new Date().toISOString()
+        });
         return res.status(500).json({
             success: false,
             message: 'Failed to process checkout',
+            error: errorMessage,
+            timestamp: new Date().toISOString()
         });
     }
 };

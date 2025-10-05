@@ -7,6 +7,7 @@ const router = (0, express_1.Router)();
 // Public routes
 router.post('/signup', authController_1.signupValidation, authController_1.signup);
 router.post('/login', authController_1.loginValidation, authController_1.login);
+router.get('/test-db', authController_1.testDatabase);
 // Protected routes
 router.get('/profile', auth_1.authenticateToken, authController_1.getProfile);
 exports.default = router;

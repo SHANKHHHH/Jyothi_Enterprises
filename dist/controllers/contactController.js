@@ -112,25 +112,45 @@ exports.submitContactForm = submitContactForm;
 // Test email service
 const testEmailService = async (req, res) => {
     try {
+        console.log('🧪 Testing email service...');
+        // Check API key status
+        const apiKey = process.env.RESEND_API_KEY;
+        const apiKeyStatus = {
+            present: !!apiKey,
+            length: apiKey?.length || 0,
+            startsWith: apiKey?.substring(0, 10) || 'N/A',
+            endsWith: apiKey?.substring(apiKey.length - 10) || 'N/A'
+        };
+        console.log('🔑 API Key Status:', apiKeyStatus);
+        // Test Resend API directly
         const emailSent = await emailService_1.default.testEmailService();
         if (emailSent) {
             return res.status(200).json({
                 success: true,
                 message: 'Test email sent successfully!',
+                apiKeyStatus
             });
         }
         else {
             return res.status(500).json({
                 success: false,
-                message: 'Failed to send test email. Please check your email configuration.',
+                message: 'Failed to send test email. Check server logs for details.',
+                apiKeyStatus,
+                debug: {
+                    apiKeyPresent: !!apiKey,
+                    apiKeyLength: apiKey?.length || 0,
+                    note: 'Check server console for detailed error logs'
+                }
             });
         }
     }
     catch (error) {
-        console.error('Test email error:', error);
+        console.error('❌ Test email error:', error);
         return res.status(500).json({
             success: false,
             message: 'Internal server error during test email.',
+            error: error instanceof Error ? error.message : 'Unknown error',
+            stack: error instanceof Error ? error.stack : undefined
         });
     }
 };
@@ -144,8 +164,8 @@ const getContactInfo = async (req, res) => {
                 hotline: '+91 99000 22301',
             },
             email: {
-                info: 'gdhruv579@gmail.com',
-                sales: 'dhruvgupfa523@gmail.com',
+                info: 'flexxftw12@gmail.com',
+                sales: 'flexxftw12@gmail.com',
             },
             address: 'Your business address here',
             businessHours: '24/7 Service Available',

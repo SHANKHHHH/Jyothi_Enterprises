@@ -30,6 +30,18 @@ export const signup = async (req: Request, res: Response) => {
 
     const { email, password } = req.body;
     
+    // Test database connection first
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+    } catch (dbError) {
+      console.error('Database connection test failed:', dbError);
+      return res.status(500).json({ 
+        error: 'Database connection failed',
+        message: 'Unable to connect to database',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
     const existingUser = await prisma.user.findUnique({ where: { email } });
     
     if (existingUser) {
@@ -55,7 +67,22 @@ export const signup = async (req: Request, res: Response) => {
     res.status(201).json({ message: 'User created successfully', user, token });
   } catch (error) {
     console.error('Signup error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    
+    // Provide more detailed error information for debugging
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    console.error('Signup error details:', {
+      message: errorMessage,
+      stack: errorStack,
+      timestamp: new Date().toISOString()
+    });
+    
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: errorMessage,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
@@ -95,7 +122,22 @@ export const login = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    
+    // Provide more detailed error information for debugging
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    console.error('Login error details:', {
+      message: errorMessage,
+      stack: errorStack,
+      timestamp: new Date().toISOString()
+    });
+    
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: errorMessage,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 
@@ -110,6 +152,54 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Test endpoint to diagnose database issues
+export const testDatabase = async (req: Request, res: Response) => {
+  try {
+    console.log('Testing database connection...');
+    
+    // Test basic connection
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('Basic database query successful');
+    
+    // Test if users table exists
+    const tableExists = await prisma.$queryRaw`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'users'
+      );
+    `;
+    console.log('Users table exists:', tableExists);
+    
+    // Test if we can query users table
+    const userCount = await prisma.user.count();
+    console.log('User count:', userCount);
+    
+    res.json({
+      success: true,
+      message: 'Database connection successful',
+      details: {
+        basicQuery: 'OK',
+        usersTableExists: tableExists,
+        userCount: userCount
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Database test error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    res.status(500).json({
+      success: false,
+      error: 'Database test failed',
+      message: errorMessage,
+      stack: errorStack,
+      timestamp: new Date().toISOString()
+    });
   }
 };
 

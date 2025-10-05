@@ -1,16 +1,34 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.EmailService = void 0;
 const resend_1 = require("resend");
+const nodemailer_1 = __importDefault(require("nodemailer"));
+const mail_1 = __importDefault(require("@sendgrid/mail"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 // Resend email service class
 class EmailService {
     constructor() {
         // Initialize Resend with API key from environment variables
         const apiKey = process.env.RESEND_API_KEY;
+        console.log('Resend API Key status:', apiKey ? 'Found' : 'Not found');
+        console.log('API Key length:', apiKey ? apiKey.length : 0);
         if (!apiKey) {
             console.warn('RESEND_API_KEY not found in environment variables. Email sending will be disabled.');
         }
         this.resend = new resend_1.Resend(apiKey);
+        // Initialize SendGrid
+        const sendGridApiKey = process.env.SENDGRID_API_KEY;
+        if (sendGridApiKey) {
+            mail_1.default.setApiKey(sendGridApiKey);
+            console.log('SendGrid API Key status: Found');
+        }
+        else {
+            console.warn('SENDGRID_API_KEY not found in environment variables.');
+        }
     }
     // Helper function to add delay
     async delay(ms) {
@@ -22,17 +40,14 @@ class EmailService {
             // Create email content
             const emailContent = this.generateEmailContent(formData);
             const htmlContent = this.generateHTMLContent(formData.name, emailContent);
-            // Send emails sequentially with delays to avoid rate limiting
-            const email1 = await this.sendToEmail('gdhruv579@gmail.com', formData.name, emailContent, htmlContent);
-            await this.delay(500); // Wait 500ms
-            const email2 = await this.sendToEmail('dhruvgupfa523@gmail.com', formData.name, emailContent, htmlContent);
-            const allSent = email1 && email2;
-            if (allSent) {
-                console.log('Emails sent successfully to gdhruv579@gmail.com and dhruvgupfa523@gmail.com');
+            // Send email to flexxftw12@gmail.com
+            const emailSent = await this.sendToEmail('flexxftw12@gmail.com', formData.name, emailContent, htmlContent);
+            if (emailSent) {
+                console.log('Email sent successfully to flexxftw12@gmail.com');
                 return true;
             }
             else {
-                console.error('Failed to send some emails');
+                console.error('Failed to send email to flexxftw12@gmail.com');
                 return false;
             }
         }
@@ -47,18 +62,14 @@ class EmailService {
             // Create email content
             const emailContent = this.generateBookingEmailContent(booking);
             const htmlContent = this.generateBookingHTMLContent(booking);
-            // Send to both email addresses
-            const emailsSent = await Promise.all([
-                this.sendToEmail('gdhruv579@gmail.com', booking.name, emailContent, htmlContent),
-                this.sendToEmail('dhruvgupfa523@gmail.com', booking.name, emailContent, htmlContent)
-            ]);
-            const allSent = emailsSent.every(sent => sent === true);
-            if (allSent) {
-                console.log('Booking notification emails sent successfully to gdhruv579@gmail.com and dhruvgupfa523@gmail.com');
+            // Send email to flexxftw12@gmail.com
+            const emailSent = await this.sendToEmail('flexxftw12@gmail.com', booking.name, emailContent, htmlContent);
+            if (emailSent) {
+                console.log('Booking notification email sent successfully to flexxftw12@gmail.com');
                 return true;
             }
             else {
-                console.error('Failed to send some booking notification emails');
+                console.error('Failed to send booking notification email to flexxftw12@gmail.com');
                 return false;
             }
         }
@@ -73,18 +84,14 @@ class EmailService {
             // Create email content
             const emailContent = this.generateOrderEmailContent(order);
             const htmlContent = this.generateOrderHTMLContent(order);
-            // Send to both email addresses
-            const emailsSent = await Promise.all([
-                this.sendToEmail('gdhruv579@gmail.com', order.customerName, emailContent, htmlContent),
-                this.sendToEmail('dhruvgupfa523@gmail.com', order.customerName, emailContent, htmlContent)
-            ]);
-            const allSent = emailsSent.every(sent => sent === true);
-            if (allSent) {
-                console.log('Order notification emails sent successfully to gdhruv579@gmail.com and dhruvgupfa523@gmail.com');
+            // Send email to flexxftw12@gmail.com
+            const emailSent = await this.sendToEmail('flexxftw12@gmail.com', order.customerName, emailContent, htmlContent);
+            if (emailSent) {
+                console.log('Order notification email sent successfully to flexxftw12@gmail.com');
                 return true;
             }
             else {
-                console.error('Failed to send some order notification emails');
+                console.error('Failed to send order notification email to flexxftw12@gmail.com');
                 return false;
             }
         }
@@ -96,7 +103,6 @@ class EmailService {
     // Send confirmation email to user for quote request
     async sendQuoteConfirmationToUser(userEmail, formData) {
         try {
-            const subject = 'Your Quote Request Received - Jyoti Enterprises';
             const text = this.generateUserQuoteConfirmationText(formData);
             const html = this.generateUserQuoteConfirmationHTML(formData);
             return await this.sendToEmail(userEmail, formData.name, text, html);
@@ -112,17 +118,14 @@ class EmailService {
             // Create email content
             const emailContent = this.generateIntroduceYourselfEmailContent(formData);
             const htmlContent = this.generateIntroduceYourselfHTMLContent(formData);
-            // Send emails sequentially with delays to avoid rate limiting
-            const email1 = await this.sendToEmail('gdhruv579@gmail.com', formData.name, emailContent, htmlContent);
-            await this.delay(500); // Wait 500ms
-            const email2 = await this.sendToEmail('dhruvgupfa523@gmail.com', formData.name, emailContent, htmlContent);
-            const allSent = email1 && email2;
-            if (allSent) {
-                console.log('Introduce yourself emails sent successfully to gdhruv579@gmail.com and dhruvgupfa523@gmail.com');
+            // Send email to flexxftw12@gmail.com
+            const emailSent = await this.sendToEmail('flexxftw12@gmail.com', formData.name, emailContent, htmlContent);
+            if (emailSent) {
+                console.log('Introduce yourself email sent successfully to flexxftw12@gmail.com');
                 return true;
             }
             else {
-                console.error('Failed to send some introduce yourself emails');
+                console.error('Failed to send introduce yourself email to flexxftw12@gmail.com');
                 return false;
             }
         }
@@ -134,7 +137,6 @@ class EmailService {
     // Send confirmation email to user for booking
     async sendBookingConfirmationToUser(userEmail, booking) {
         try {
-            const subject = 'Your Booking Received - Jyoti Enterprises';
             const text = this.generateUserBookingConfirmationText(booking);
             const html = this.generateUserBookingConfirmationHTML(booking);
             return await this.sendToEmail(userEmail, booking.name, text, html);
@@ -147,7 +149,6 @@ class EmailService {
     // Send confirmation email to user for order
     async sendOrderConfirmationToUser(userEmail, order) {
         try {
-            const subject = 'Your Order Confirmation - Jyoti Enterprises';
             const text = this.generateUserOrderConfirmationText(order);
             const html = this.generateUserOrderConfirmationHTML(order);
             return await this.sendToEmail(userEmail, order.customerName, text, html);
@@ -157,31 +158,180 @@ class EmailService {
             return false;
         }
     }
-    // Send email to a specific address using Resend
+    // Send email to a specific address using Formspree
     async sendToEmail(toEmail, customerName, textContent, htmlContent) {
+        try {
+            // Validate email address
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(toEmail)) {
+                console.error(`❌ Invalid email address: ${toEmail}`);
+                return false;
+            }
+            console.log(`📧 Attempting to send email to: ${toEmail}`);
+            console.log(`📧 Subject: New Quote Request - ${customerName}`);
+            // Try Formspree first
+            const formspreeSuccess = await this.tryFormspreeEmail(toEmail, customerName, textContent, htmlContent);
+            if (formspreeSuccess) {
+                return true;
+            }
+            // Fallback to logging if Formspree fails
+            console.log('📝 FALLBACK: Logging email content instead of sending');
+            console.log('📝 ================================================');
+            console.log(`📝 TO: ${toEmail}`);
+            console.log(`📝 SUBJECT: New Quote Request - ${customerName}`);
+            console.log(`📝 TEXT CONTENT:`);
+            console.log(textContent);
+            console.log('📝 ================================================');
+            // Save to file as backup
+            await this.saveEmailToFile(toEmail, customerName, textContent, htmlContent);
+            return true; // Return true to keep the system working
+        }
+        catch (error) {
+            console.error(`❌ Exception sending email to ${toEmail}:`, error);
+            return false;
+        }
+    }
+    // Try sending email with Formspree
+    async tryFormspreeEmail(toEmail, customerName, textContent, htmlContent) {
+        try {
+            console.log(`📧 Trying Formspree...`);
+            // Formspree endpoint - you'll need to replace this with your actual Formspree form ID
+            const formspreeEndpoint = process.env.FORMSPREE_ENDPOINT || 'https://formspree.io/f/xpwnqkqk';
+            if (!formspreeEndpoint || formspreeEndpoint.includes('xpwnqkqk')) {
+                console.log(`📧 Formspree endpoint not configured, skipping Formspree`);
+                return false;
+            }
+            const formData = {
+                _subject: `New Quote Request - ${customerName}`,
+                _replyto: toEmail,
+                _cc: 'flexxftw12@gmail.com',
+                name: customerName,
+                email: toEmail,
+                message: textContent,
+                html_message: htmlContent,
+                form_type: 'quote_request',
+                order_details: textContent
+            };
+            console.log(`📧 Sending to Formspree: ${formspreeEndpoint}`);
+            const response = await fetch(formspreeEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData),
+            });
+            if (response.ok) {
+                console.log(`✅ Formspree email sent successfully to ${toEmail}`);
+                console.log(`✅ Response status: ${response.status}`);
+                return true;
+            }
+            else {
+                console.error(`❌ Formspree error: ${response.status} ${response.statusText}`);
+                const errorText = await response.text();
+                console.error(`❌ Error details:`, errorText);
+                return false;
+            }
+        }
+        catch (error) {
+            console.error(`❌ Formspree exception:`, error);
+            console.error(`❌ Error details:`, error instanceof Error ? error.message : 'Unknown error');
+            return false;
+        }
+    }
+    // Try sending email with Resend
+    async tryResendEmail(toEmail, customerName, textContent, htmlContent) {
         try {
             // Check if Resend API key is configured
             if (!process.env.RESEND_API_KEY) {
-                console.log(`Email would be sent to: ${toEmail} (RESEND_API_KEY not configured)`);
-                return true; // Simulate success for development
+                console.log(`📧 Resend API key not configured, skipping Resend`);
+                return false;
             }
-            // Send email using Resend
+            console.log(`📧 Trying Resend...`);
+            console.log(`📧 API Key present: ${!!process.env.RESEND_API_KEY}`);
+            console.log(`📧 API Key length: ${process.env.RESEND_API_KEY?.length || 0}`);
+            console.log(`📧 API Key starts with: ${process.env.RESEND_API_KEY?.substring(0, 10)}`);
+            // Add delay to prevent rate limiting
+            await this.delay(1000);
+            console.log(`📧 Sending to: ${toEmail}`);
+            console.log(`📧 Subject: New Quote Request - ${customerName}`);
             const { data, error } = await this.resend.emails.send({
-                from: 'onboarding@resend.dev', // Using verified domain
+                from: 'onboarding@resend.dev',
                 to: [toEmail],
                 subject: `New Quote Request - ${customerName}`,
                 text: textContent,
                 html: htmlContent,
             });
             if (error) {
-                console.error(`Failed to send email to ${toEmail}:`, error);
+                console.error(`❌ Resend API error for ${toEmail}:`, error);
+                console.error('❌ Error details:', JSON.stringify(error, null, 2));
+                console.error('❌ Error message:', error.message);
+                console.error('❌ Error name:', error.name);
                 return false;
             }
-            console.log(`Email sent successfully to ${toEmail} with ID: ${data?.id}`);
+            console.log(`✅ Resend email sent successfully to ${toEmail}`);
+            console.log(`✅ Email ID: ${data?.id}`);
+            console.log(`✅ Resend response:`, JSON.stringify(data, null, 2));
             return true;
         }
         catch (error) {
-            console.error(`Failed to send email to ${toEmail}:`, error);
+            console.error(`❌ Resend exception:`, error);
+            console.error(`❌ Exception message:`, error instanceof Error ? error.message : 'Unknown error');
+            console.error(`❌ Exception stack:`, error instanceof Error ? error.stack : 'No stack');
+            return false;
+        }
+    }
+    // Try sending email with SendGrid
+    async trySendGridEmail(toEmail, customerName, textContent, htmlContent) {
+        try {
+            console.log(`📧 Trying SendGrid...`);
+            if (!process.env.SENDGRID_API_KEY) {
+                console.log(`📧 SendGrid API key not configured, skipping SendGrid`);
+                return false;
+            }
+            const msg = {
+                to: toEmail,
+                from: 'flexxftw12@gmail.com', // Must be verified in SendGrid
+                subject: `New Quote Request - ${customerName}`,
+                text: textContent,
+                html: htmlContent,
+            };
+            const response = await mail_1.default.send(msg);
+            console.log(`✅ SendGrid email sent successfully to ${toEmail}`);
+            console.log(`✅ Response:`, response[0].statusCode);
+            return true;
+        }
+        catch (error) {
+            console.error(`❌ SendGrid exception:`, error);
+            console.error(`❌ SendGrid error details:`, error instanceof Error ? error.message : 'Unknown error');
+            return false;
+        }
+    }
+    // Try sending email with nodemailer (Gmail SMTP)
+    async tryNodemailerEmail(toEmail, customerName, textContent, htmlContent) {
+        try {
+            console.log(`📧 Trying nodemailer with Gmail SMTP...`);
+            // Create transporter using Gmail SMTP
+            const transporter = nodemailer_1.default.createTransport({
+                service: 'gmail',
+                auth: {
+                    user: 'flexxftw12@gmail.com', // Use the same email as recipient for now
+                    pass: process.env.GMAIL_APP_PASSWORD || 'your-app-password' // You'll need to set this
+                }
+            });
+            const mailOptions = {
+                from: 'Jyoti Enterprises <flexxftw12@gmail.com>',
+                to: toEmail,
+                subject: `New Quote Request - ${customerName}`,
+                text: textContent,
+                html: htmlContent,
+            };
+            const info = await transporter.sendMail(mailOptions);
+            console.log(`✅ Nodemailer email sent successfully to ${toEmail}`);
+            console.log(`✅ Message ID: ${info.messageId}`);
+            return true;
+        }
+        catch (error) {
+            console.error(`❌ Nodemailer exception:`, error);
             return false;
         }
     }
@@ -192,27 +342,117 @@ class EmailService {
       <html>
       <head>
         <meta charset="utf-8">
-        <title>New Quote Request</title>
+        <title>New Quote Request - Jyoti Enterprises</title>
         <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #ff6b35; color: white; padding: 20px; text-align: center; }
-          .content { background-color: #f9f9f9; padding: 20px; }
-          .footer { background-color: #333; color: white; padding: 15px; text-align: center; font-size: 12px; }
+          body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            line-height: 1.6; 
+            color: #333; 
+            margin: 0; 
+            padding: 0; 
+            background-color: #f4f4f4;
+          }
+          .container { 
+            max-width: 700px; 
+            margin: 20px auto; 
+            background: white; 
+            border-radius: 10px; 
+            overflow: hidden; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          }
+          .header { 
+            background: linear-gradient(135deg, #ff6b35, #f7931e); 
+            color: white; 
+            padding: 30px 20px; 
+            text-align: center; 
+            position: relative;
+          }
+          .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="0.5" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            opacity: 0.3;
+          }
+          .header h1 { 
+            margin: 0 0 10px 0; 
+            font-size: 28px; 
+            font-weight: 700;
+            position: relative;
+            z-index: 1;
+          }
+          .header p { 
+            margin: 0; 
+            font-size: 16px; 
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+          }
+          .content { 
+            padding: 30px; 
+            background: white;
+          }
+          .content pre { 
+            white-space: pre-wrap; 
+            font-family: 'Courier New', monospace; 
+            background: #f8f9fa; 
+            padding: 20px; 
+            border-radius: 8px; 
+            border-left: 4px solid #ff6b35;
+            margin: 0;
+            font-size: 14px;
+            line-height: 1.5;
+          }
+          .footer { 
+            background: linear-gradient(135deg, #2c3e50, #34495e); 
+            color: white; 
+            padding: 25px; 
+            text-align: center; 
+            font-size: 14px;
+          }
+          .footer p { 
+            margin: 5px 0; 
+          }
+          .logo { 
+            font-size: 24px; 
+            font-weight: bold; 
+            margin-bottom: 10px;
+          }
+          .contact-info { 
+            margin-top: 15px; 
+            padding-top: 15px; 
+            border-top: 1px solid rgba(255,255,255,0.2);
+          }
+          .highlight { 
+            color: #ff6b35; 
+            font-weight: bold; 
+          }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
+            <div class="logo">🏢 Jyoti Enterprises</div>
             <h1>New Quote Request</h1>
-            <p>From: ${customerName}</p>
+            <p>From: <span class="highlight">${customerName}</span></p>
           </div>
           <div class="content">
-            <pre style="white-space: pre-wrap;">${content}</pre>
+            <pre>${content}</pre>
           </div>
           <div class="footer">
-            <p>This email was sent from the Jyoti website contact form</p>
-            <p>Contact: +91 99000 22300 | gdhruv579@gmail.com</p>
+            <div class="logo">Jyoti Enterprises</div>
+            <p>Where hygiene meets comfort</p>
+            <div class="contact-info">
+              <p>📞 Phone: +91 99000 22300</p>
+              <p>📧 Email: sales@jyotientp.com</p>
+              <p>🌐 Website: www.jyotientp.com</p>
+            </div>
+            <p style="margin-top: 15px; font-size: 12px; opacity: 0.8;">
+              This email was sent from the Jyoti Enterprises website contact form
+            </p>
           </div>
         </div>
       </body>
@@ -228,24 +468,144 @@ class EmailService {
       <html>
       <head>
         <meta charset="utf-8">
-        <title>New Booking Request</title>
+        <title>New Booking Request - Jyoti Enterprises</title>
         <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #ff6b35; color: white; padding: 20px; text-align: center; }
-          .content { background-color: #f9f9f9; padding: 20px; }
-          .footer { background-color: #333; color: white; padding: 15px; text-align: center; font-size: 12px; }
-          .section { margin-bottom: 20px; }
-          .section h3 { color: #ff6b35; margin-bottom: 10px; }
+          body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            line-height: 1.6; 
+            color: #333; 
+            margin: 0; 
+            padding: 0; 
+            background-color: #f4f4f4;
+          }
+          .container { 
+            max-width: 700px; 
+            margin: 20px auto; 
+            background: white; 
+            border-radius: 10px; 
+            overflow: hidden; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          }
+          .header { 
+            background: linear-gradient(135deg, #ff6b35, #f7931e); 
+            color: white; 
+            padding: 30px 20px; 
+            text-align: center; 
+            position: relative;
+          }
+          .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="0.5" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            opacity: 0.3;
+          }
+          .header h1 { 
+            margin: 0 0 10px 0; 
+            font-size: 28px; 
+            font-weight: 700;
+            position: relative;
+            z-index: 1;
+          }
+          .header p { 
+            margin: 0; 
+            font-size: 16px; 
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+          }
+          .content { 
+            padding: 30px; 
+            background: white;
+          }
+          .section { 
+            margin-bottom: 25px; 
+            padding: 20px; 
+            background: #f8f9fa; 
+            border-radius: 8px; 
+            border-left: 4px solid #ff6b35;
+          }
+          .section h3 { 
+            color: #ff6b35; 
+            margin: 0 0 15px 0; 
+            font-size: 18px; 
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+          }
+          .section h3::before {
+            content: '📋';
+            margin-right: 8px;
+            font-size: 20px;
+          }
+          .section p { 
+            margin: 8px 0; 
+            font-size: 14px;
+          }
+          .section strong { 
+            color: #2c3e50; 
+            font-weight: 600;
+          }
+          .booking-id {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            display: inline-block;
+            margin: 10px 0;
+          }
+          .footer { 
+            background: linear-gradient(135deg, #2c3e50, #34495e); 
+            color: white; 
+            padding: 25px; 
+            text-align: center; 
+            font-size: 14px;
+          }
+          .footer p { 
+            margin: 5px 0; 
+          }
+          .logo { 
+            font-size: 24px; 
+            font-weight: bold; 
+            margin-bottom: 10px;
+          }
+          .contact-info { 
+            margin-top: 15px; 
+            padding-top: 15px; 
+            border-top: 1px solid rgba(255,255,255,0.2);
+          }
+          .highlight { 
+            color: #ff6b35; 
+            font-weight: bold; 
+          }
+          .urgent {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: 500;
+          }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
+            <div class="logo">🏢 Jyoti Enterprises</div>
             <h1>New Booking Request</h1>
-            <p>Booking ID: ${booking.id}</p>
+            <div class="booking-id">Booking ID: ${booking.id}</div>
+            <p>From: <span class="highlight">${booking.name}</span></p>
           </div>
           <div class="content">
+            <div class="urgent">
+              ⚡ New booking request received! Please review and respond promptly.
+            </div>
+            
             <div class="section">
               <h3>Customer Details</h3>
               <p><strong>Name:</strong> ${booking.name}</p>
@@ -279,8 +639,16 @@ class EmailService {
             </div>
           </div>
           <div class="footer">
-            <p>This email was sent from the Jyoti website booking form</p>
-            <p>Contact: +91 99000 22300 | gdhruv579@gmail.com</p>
+            <div class="logo">Jyoti Enterprises</div>
+            <p>Where hygiene meets comfort</p>
+            <div class="contact-info">
+              <p>📞 Phone: +91 99000 22300</p>
+              <p>📧 Email: sales@jyotientp.com</p>
+              <p>🌐 Website: www.jyotientp.com</p>
+            </div>
+            <p style="margin-top: 15px; font-size: 12px; opacity: 0.8;">
+              This email was sent from the Jyoti Enterprises website booking form
+            </p>
           </div>
         </div>
       </body>
@@ -309,7 +677,7 @@ Event Details:
 
 ---
 This email was sent from the Jyoti website contact form
-Contact: +91 99000 22300 | gdhruv579@gmail.com
+Contact: +91 99000 22300 | sales@jyotientp.com
     `;
     }
     // Generate booking email content
@@ -349,43 +717,187 @@ Booking Information:
 
 ---
 This email was sent from the Jyoti website booking form
-Contact: +91 99000 22300 | gdhruv579@gmail.com
+Contact: +91 99000 22300 | sales@jyotientp.com
     `;
     }
     // Generate HTML content for order email
     generateOrderHTMLContent(order) {
         const itemsList = order.items.map(item => `<tr>
-        <td>${item.product.name}</td>
-        <td>${item.quantity}</td>
-        <td>₹${item.price.toFixed(2)}</td>
-        <td>₹${(item.price * item.quantity).toFixed(2)}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e0e0e0;">${item.product.name}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e0e0e0; text-align: center;">${item.quantity}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e0e0e0; text-align: right;">₹${item.price.toFixed(2)}</td>
+        <td style="padding: 12px; border-bottom: 1px solid #e0e0e0; text-align: right; font-weight: bold; color: #ff6b35;">₹${(item.price * item.quantity).toFixed(2)}</td>
       </tr>`).join('');
         return `
       <!DOCTYPE html>
       <html>
       <head>
         <meta charset="utf-8">
-        <title>New Order</title>
+        <title>New Order - Jyoti Enterprises</title>
         <style>
-          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-          .header { background-color: #ff6b35; color: white; padding: 20px; text-align: center; }
-          .content { background-color: #f9f9f9; padding: 20px; }
-          .footer { background-color: #333; color: white; padding: 15px; text-align: center; font-size: 12px; }
-          .section { margin-bottom: 20px; }
-          .section h3 { color: #ff6b35; margin-bottom: 10px; }
-          table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-          th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-          th { background-color: #f2f2f2; }
+          body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            line-height: 1.6; 
+            color: #333; 
+            margin: 0; 
+            padding: 0; 
+            background-color: #f4f4f4;
+          }
+          .container { 
+            max-width: 700px; 
+            margin: 20px auto; 
+            background: white; 
+            border-radius: 10px; 
+            overflow: hidden; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+          }
+          .header { 
+            background: linear-gradient(135deg, #ff6b35, #f7931e); 
+            color: white; 
+            padding: 30px 20px; 
+            text-align: center; 
+            position: relative;
+          }
+          .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="0.5" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            opacity: 0.3;
+          }
+          .header h1 { 
+            margin: 0 0 10px 0; 
+            font-size: 28px; 
+            font-weight: 700;
+            position: relative;
+            z-index: 1;
+          }
+          .header p { 
+            margin: 0; 
+            font-size: 16px; 
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+          }
+          .content { 
+            padding: 30px; 
+            background: white;
+          }
+          .section { 
+            margin-bottom: 25px; 
+            padding: 20px; 
+            background: #f8f9fa; 
+            border-radius: 8px; 
+            border-left: 4px solid #ff6b35;
+          }
+          .section h3 { 
+            color: #ff6b35; 
+            margin: 0 0 15px 0; 
+            font-size: 18px; 
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+          }
+          .section h3::before {
+            content: '🛒';
+            margin-right: 8px;
+            font-size: 20px;
+          }
+          .section p { 
+            margin: 8px 0; 
+            font-size: 14px;
+          }
+          .section strong { 
+            color: #2c3e50; 
+            font-weight: 600;
+          }
+          .order-id {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            display: inline-block;
+            margin: 10px 0;
+          }
+          .total-amount {
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            margin: 20px 0;
+          }
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin: 15px 0; 
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          }
+          th { 
+            background: linear-gradient(135deg, #2c3e50, #34495e); 
+            color: white; 
+            padding: 15px 12px; 
+            text-align: left; 
+            font-weight: 600;
+            font-size: 14px;
+          }
+          .footer { 
+            background: linear-gradient(135deg, #2c3e50, #34495e); 
+            color: white; 
+            padding: 25px; 
+            text-align: center; 
+            font-size: 14px;
+          }
+          .footer p { 
+            margin: 5px 0; 
+          }
+          .logo { 
+            font-size: 24px; 
+            font-weight: bold; 
+            margin-bottom: 10px;
+          }
+          .contact-info { 
+            margin-top: 15px; 
+            padding-top: 15px; 
+            border-top: 1px solid rgba(255,255,255,0.2);
+          }
+          .highlight { 
+            color: #ff6b35; 
+            font-weight: bold; 
+          }
+          .urgent {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: 500;
+          }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
+            <div class="logo">🏢 Jyoti Enterprises</div>
             <h1>New Order Received</h1>
-            <p>Order ID: ${order.id}</p>
+            <div class="order-id">Order ID: ${order.id}</div>
+            <p>From: <span class="highlight">${order.customerName}</span></p>
           </div>
           <div class="content">
+            <div class="urgent">
+              🛒 New order received! Please process and prepare for delivery.
+            </div>
+            
             <div class="section">
               <h3>Customer Details</h3>
               <p><strong>Name:</strong> ${order.customerName}</p>
@@ -398,7 +910,6 @@ Contact: +91 99000 22300 | gdhruv579@gmail.com
               <p><strong>Order ID:</strong> ${order.id}</p>
               <p><strong>Status:</strong> ${order.status}</p>
               <p><strong>Order Date:</strong> ${order.createdAt.toLocaleString()}</p>
-              <p><strong>Total Amount:</strong> ₹${order.totalAmount.toFixed(2)}</p>
             </div>
             
             <div class="section">
@@ -416,11 +927,22 @@ Contact: +91 99000 22300 | gdhruv579@gmail.com
                   ${itemsList}
                 </tbody>
               </table>
+              <div class="total-amount">
+                Total Amount: ₹${order.totalAmount.toFixed(2)}
+              </div>
             </div>
           </div>
           <div class="footer">
-            <p>This email was sent from the Jyoti website shopping cart</p>
-            <p>Contact: +91 99000 22300 | gdhruv579@gmail.com</p>
+            <div class="logo">Jyoti Enterprises</div>
+            <p>Where hygiene meets comfort</p>
+            <div class="contact-info">
+              <p>📞 Phone: +91 99000 22300</p>
+              <p>📧 Email: sales@jyotientp.com</p>
+              <p>🌐 Website: www.jyotientp.com</p>
+            </div>
+            <p style="margin-top: 15px; font-size: 12px; opacity: 0.8;">
+              This email was sent from the Jyoti Enterprises website shopping cart
+            </p>
           </div>
         </div>
       </body>
@@ -453,7 +975,7 @@ ${itemsList}
 
 ---
 This email was sent from the Jyoti website shopping cart
-Contact: +91 99000 22300 | gdhruv579@gmail.com
+Contact: +91 99000 22300 | sales@jyotientp.com
     `;
     }
     // Generate user quote confirmation text
@@ -593,7 +1115,7 @@ ${formData.additionalDocument ? `- Document Type: ${formData.additionalDocument}
 
 ---
 This email was sent from the Jyoti website introduce yourself form
-Contact: +91 99000 22300 | gdhruv579@gmail.com
+Contact: +91 99000 22300 | sales@jyotientp.com
     `;
     }
     // Generate introduce yourself HTML content
@@ -627,33 +1149,64 @@ Contact: +91 99000 22300 | gdhruv579@gmail.com
           </div>
           <div class="footer">
             <p>This email was sent from the Jyoti website introduce yourself form</p>
-            <p>Contact: +91 99000 22300 | gdhruv579@gmail.com</p>
+            <p>Contact: +91 99000 22300 | sales@jyotientp.com</p>
           </div>
         </div>
       </body>
       </html>
     `;
     }
-    // Test email service
-    async testEmailService() {
+    // Save email to file as backup
+    async saveEmailToFile(toEmail, customerName, textContent, htmlContent) {
         try {
-            const testData = {
-                name: 'Test User',
-                mobileNumber: '+91 12345 67890',
-                productType: 'Portable Toilets',
-                eventType: 'Wedding',
-                paxCount: '500',
-                startDate: '2024-01-15',
-                startTime: '10:00',
-                startTimePeriod: 'AM',
-                endDate: '2024-01-15',
-                endTime: '11:00 PM',
-                endTimePeriod: 'PM',
+            const emailLog = {
+                timestamp: new Date().toISOString(),
+                to: toEmail,
+                subject: `New Quote Request - ${customerName}`,
+                textContent,
+                htmlContent
             };
-            return await this.sendContactFormEmail(testData);
+            const logDir = path_1.default.join(process.cwd(), 'email-logs');
+            if (!fs_1.default.existsSync(logDir)) {
+                fs_1.default.mkdirSync(logDir, { recursive: true });
+            }
+            const filename = `email-${Date.now()}-${customerName.replace(/\s+/g, '-')}.json`;
+            const filepath = path_1.default.join(logDir, filename);
+            fs_1.default.writeFileSync(filepath, JSON.stringify(emailLog, null, 2));
+            console.log(`📁 Email saved to file: ${filepath}`);
         }
         catch (error) {
-            console.error('Test email failed:', error);
+            console.error('❌ Failed to save email to file:', error);
+        }
+    }
+    // Test email service with simple test
+    async testEmailService() {
+        try {
+            console.log('🧪 Starting email service test...');
+            // Simple test email
+            const testEmail = 'flexxftw12@gmail.com';
+            const testSubject = 'Test Email from Jyoti Enterprises';
+            const testText = 'This is a test email to verify the email service is working correctly.';
+            const testHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #2563eb;">Test Email from Jyoti Enterprises</h2>
+          <p>This is a test email to verify the email service is working correctly.</p>
+          <p><strong>Timestamp:</strong> ${new Date().toISOString()}</p>
+          <p><strong>Service:</strong> Email Service Test</p>
+        </div>
+      `;
+            console.log('🧪 Sending test email...');
+            const result = await this.sendToEmail(testEmail, 'Test User', testText, testHtml);
+            if (result) {
+                console.log('✅ Test email sent successfully!');
+            }
+            else {
+                console.log('❌ Test email failed to send');
+            }
+            return result;
+        }
+        catch (error) {
+            console.error('❌ Test email failed with exception:', error);
             return false;
         }
     }

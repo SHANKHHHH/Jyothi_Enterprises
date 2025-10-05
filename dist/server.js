@@ -10,9 +10,12 @@ const cors_1 = __importDefault(require("cors"));
 const api_1 = __importDefault(require("./routes/api"));
 const database_1 = __importDefault(require("./config/database"));
 const app = (0, express_1.default)();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 // Middleware
-app.use((0, cors_1.default)());
+app.use((0, cors_1.default)({
+    origin: ['https://jyotientp.com', 'http://localhost:3000', 'http://localhost:5173'],
+    credentials: true
+}));
 app.use(express_1.default.json());
 app.use(express_1.default.urlencoded({ extended: true }));
 // Mount unified API routes
@@ -74,8 +77,8 @@ app.get('/test', (req, res) => {
     });
 });
 // Start server
-app.listen(PORT, () => {
-    console.log(` Server running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on port ${PORT}`);
     console.log(` Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(` Health check: http://localhost:${PORT}/health`);
     console.log(` Database health: http://localhost:${PORT}/health/db`);

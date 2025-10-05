@@ -9,55 +9,58 @@ export const contactFormValidation = [
     .isLength({ min: 2, max: 50 })
     .withMessage('Name must be between 2 and 50 characters'),
   
+  body('email')
+    .trim()
+    .isEmail()
+    .normalizeEmail()
+    .withMessage('Please enter a valid email address'),
+  
   body('mobileNumber')
     .trim()
     .matches(/^(\+91\s?)?[0-9]{10}$/)
     .withMessage('Please enter a valid Indian mobile number'),
   
   body('productType')
+    .optional()
     .trim()
     .isLength({ min: 1, max: 100 })
-    .withMessage('Product type is required and must be less than 100 characters'),
+    .withMessage('Product type must be less than 100 characters'),
   
   body('eventType')
+    .optional()
     .trim()
     .isLength({ min: 1, max: 100 })
-    .withMessage('Event type is required and must be less than 100 characters'),
+    .withMessage('Event type must be less than 100 characters'),
   
   body('paxCount')
+    .optional()
     .trim()
     .isLength({ min: 1, max: 20 })
-    .withMessage('Pax count is required and must be less than 20 characters'),
+    .withMessage('Pax count must be less than 20 characters'),
   
   body('startDate')
+    .optional()
     .trim()
     .isISO8601()
     .withMessage('Please enter a valid start date'),
   
   body('startTime')
+    .optional()
     .trim()
     .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
     .withMessage('Please enter a valid start time (HH:MM format)'),
   
-  body('startTimePeriod')
-    .trim()
-    .isIn(['AM', 'PM'])
-    .withMessage('Start time period must be AM or PM'),
-  
   body('endDate')
+    .optional()
     .trim()
     .isISO8601()
     .withMessage('Please enter a valid end date'),
   
   body('endTime')
+    .optional()
     .trim()
     .matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/)
     .withMessage('Please enter a valid end time (HH:MM format)'),
-  
-  body('endTimePeriod')
-    .trim()
-    .isIn(['AM', 'PM'])
-    .withMessage('End time period must be AM or PM'),
 ];
 
 // Validation rules for introduce yourself form
@@ -126,24 +129,47 @@ export const submitContactForm = async (req: Request, res: Response) => {
 // Test email service
 export const testEmailService = async (req: Request, res: Response) => {
   try {
+    console.log('🧪 Testing email service...');
+    
+    // Check API key status
+    const apiKey = process.env.RESEND_API_KEY;
+    const apiKeyStatus = {
+      present: !!apiKey,
+      length: apiKey?.length || 0,
+      startsWith: apiKey?.substring(0, 10) || 'N/A',
+      endsWith: apiKey?.substring(apiKey.length - 10) || 'N/A'
+    };
+    
+    console.log('🔑 API Key Status:', apiKeyStatus);
+    
+    // Test Resend API directly
     const emailSent = await emailService.testEmailService();
     
     if (emailSent) {
       return res.status(200).json({
         success: true,
         message: 'Test email sent successfully!',
+        apiKeyStatus
       });
     } else {
       return res.status(500).json({
         success: false,
-        message: 'Failed to send test email. Please check your email configuration.',
+        message: 'Failed to send test email. Check server logs for details.',
+        apiKeyStatus,
+        debug: {
+          apiKeyPresent: !!apiKey,
+          apiKeyLength: apiKey?.length || 0,
+          note: 'Check server console for detailed error logs'
+        }
       });
     }
   } catch (error) {
-    console.error('Test email error:', error);
+    console.error('❌ Test email error:', error);
     return res.status(500).json({
       success: false,
       message: 'Internal server error during test email.',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
     });
   }
 };
@@ -157,8 +183,8 @@ export const getContactInfo = async (req: Request, res: Response) => {
         hotline: '+91 99000 22301',
       },
       email: {
-        info: 'gdhruv579@gmail.com',
-        sales: 'dhruvgupfa523@gmail.com',
+      info: 'sales@jyotientp.com',
+      sales: 'sales@jyotientp.com',
       },
       address: 'Your business address here',
       businessHours: '24/7 Service Available',

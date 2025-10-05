@@ -1,0 +1,7 @@
+{
+  "timestamp": "2025-10-03T12:44:04.332Z",
+  "to": "flexftw12@gmail.com",
+  "subject": "New Quote Request - Test User",
+  "textContent": "This is a test email to verify the email service is working correctly.",
+  "htmlContent": "\n        <div style=\"font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;\">\n          <h2 style=\"color: #2563eb;\">Test Email from Jyoti Enterprises</h2>\n          <p>This is a test email to verify the email service is working correctly.</p>\n          <p><strong>Timestamp:</strong> 2025-10-03T12:44:00.247Z</p>\n          <p><strong>Service:</strong> Email Service Test</p>\n        </div>\n      "
+}
